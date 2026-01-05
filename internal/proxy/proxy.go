@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+const asciiLogo = `
+    ___  ___  ___  ____ _____      ___  ____ _  _
+    |__| |  | |  | [__   |   ____ |  \ |___ |  |
+    |  \ |__| |__| ___]  |        |__/ |___  \/
+`
+
 // ReverseProxy handles proxying requests to backend services
 type ReverseProxy struct {
 	target *url.URL
@@ -35,7 +41,7 @@ func NewReverseProxy(port int) *ReverseProxy {
 
 	// Handle errors gracefully
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, fmt.Sprintf("Proxy error: %v", err), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf("%s\nProxy error: %v\n", asciiLogo, err), http.StatusBadGateway)
 	}
 
 	return &ReverseProxy{

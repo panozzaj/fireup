@@ -12,6 +12,16 @@ import (
 	"github.com/panozzaj/roost-dev/internal/ui"
 )
 
+const asciiLogo = `
+    ___  ___  ___  ____ _____      ___  ____ _  _
+    |__| |  | |  | [__   |   ____ |  \ |___ |  |
+    |  \ |__| |__| ___]  |        |__/ |___  \/
+`
+
+func errorPage(msg string) string {
+	return asciiLogo + "\n" + msg + "\n"
+}
+
 // Server is the main roost-dev server
 type Server struct {
 	cfg      *config.Config
@@ -73,7 +83,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Parse hostname: [service-]appname.tld
 	if !strings.HasSuffix(host, "."+s.cfg.TLD) {
-		http.Error(w, fmt.Sprintf("Invalid host: %s (expected *.%s)", host, s.cfg.TLD), http.StatusBadRequest)
+		http.Error(w, errorPage(fmt.Sprintf("Invalid host: %s (expected *.%s)", host, s.cfg.TLD)), http.StatusBadRequest)
 		return
 	}
 
@@ -104,7 +114,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		http.Error(w, fmt.Sprintf("App not found: %s\n\nCreate a config file at: %s/%s", name, s.cfg.Dir, name), http.StatusNotFound)
+		http.Error(w, errorPage(fmt.Sprintf("App not found: %s\n\nCreate a config file at: %s/%s", name, s.cfg.Dir, name)), http.StatusNotFound)
 		return
 	}
 
@@ -145,7 +155,7 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request, app *config.A
 		// Start process if needed, then proxy
 		proc, err := s.ensureProcess(app.Name, app.Command, app.Dir, app.Env)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to start process: %v", err), http.StatusInternalServerError)
+			http.Error(w, errorPage(fmt.Sprintf("Failed to start process: %v", err)), http.StatusInternalServerError)
 			return
 		}
 		proxy.NewReverseProxy(proc.Port).ServeHTTP(w, r)
@@ -178,7 +188,7 @@ func (s *Server) handleService(w http.ResponseWriter, r *http.Request, app *conf
 
 	proc, err := s.ensureProcess(procName, svc.Command, svc.Dir, svc.Env)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
+		http.Error(w, errorPage(fmt.Sprintf("Failed to start service: %v", err)), http.StatusInternalServerError)
 		return
 	}
 
