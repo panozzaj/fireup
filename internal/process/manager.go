@@ -146,7 +146,10 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	// Build environment
 	procEnv := os.Environ()
 	procEnv = append(procEnv, fmt.Sprintf("PORT=%d", port))
+	portStr := fmt.Sprintf("%d", port)
 	for k, v := range env {
+		// Expand $PORT in env values
+		v = strings.ReplaceAll(v, "$PORT", portStr)
 		procEnv = append(procEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 

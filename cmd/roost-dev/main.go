@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +16,11 @@ import (
 	"github.com/panozzaj/roost-dev/internal/dns"
 	"github.com/panozzaj/roost-dev/internal/server"
 )
+
+// GlobalConfig stores persistent settings
+type GlobalConfig struct {
+	TLD string `json:"tld"`
+}
 
 var (
 	version = "dev"
@@ -46,12 +52,22 @@ func main() {
 	flag.IntVar(&httpsPort, "https-port", 9443, "HTTPS port to listen on")
 	flag.IntVar(&advertisePort, "advertise-port", 80, "Port to use in URLs (0 = same as http-port)")
 	flag.IntVar(&dnsPort, "dns-port", 9053, "DNS server port")
-	flag.StringVar(&tld, "tld", "localhost", "Top-level domain to use")
+	flag.StringVar(&tld, "tld", "", "Top-level domain to use (default: from config or 'localhost')")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showVer, "version", false, "Show version")
 	flag.BoolVar(&doSetup, "setup", false, "Setup pf rules for port forwarding (requires sudo)")
 	flag.BoolVar(&doCleanup, "cleanup", false, "Remove pf rules (requires sudo)")
 	flag.Parse()
+
+	// Load saved config for TLD default
+	globalCfg, err := loadGlobalConfig(configDir)
+	if err != nil {
+		log.Printf("Warning: could not load config: %v", err)
+		globalCfg = &GlobalConfig{TLD: "localhost"}
+	}
+	if tld == "" {
+		tld = globalCfg.TLD
+	}
 
 	if showHelp {
 		printUsage()
@@ -64,7 +80,7 @@ func main() {
 	}
 
 	if doSetup {
-		if err := runSetup(httpPort, dnsPort, tld); err != nil {
+		if err := runSetup(configDir, httpPort, dnsPort, tld); err != nil {
 			log.Fatalf("Setup failed: %v", err)
 		}
 		os.Exit(0)
@@ -230,12 +246,46 @@ EXAMPLES:
 }
 
 const (
-	pfAnchorPath   = "/etc/pf.anchors/roost-dev"
+	pfAnchorPath     = "/etc/pf.anchors/roost-dev"
 	launchdPlistPath = "/Library/LaunchDaemons/dev.roost.pfctl.plist"
+	globalConfigName = "config.json"
 )
 
-func runSetup(targetPort, dnsPort int, tld string) error {
+func loadGlobalConfig(configDir string) (*GlobalConfig, error) {
+	path := filepath.Join(configDir, globalConfigName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &GlobalConfig{TLD: "localhost"}, nil
+		}
+		return nil, err
+	}
+	var cfg GlobalConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func saveGlobalConfig(configDir string, cfg *GlobalConfig) error {
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+	path := filepath.Join(configDir, globalConfigName)
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func runSetup(configDir string, targetPort, dnsPort int, tld string) error {
 	fmt.Println("Setting up roost-dev...")
+
+	// Save TLD to config so we don't need --tld flag every time
+	if err := saveGlobalConfig(configDir, &GlobalConfig{TLD: tld}); err != nil {
+		fmt.Printf("Warning: could not save config: %v\n", err)
+	}
 
 	// Check if running as root
 	if os.Geteuid() != 0 {
@@ -352,14 +402,12 @@ rdr pass on lo0 inet proto tcp from any to any port 80 -> 127.0.0.1 port 9280
 	fmt.Println()
 	fmt.Println("Setup complete!")
 	fmt.Println()
-	fmt.Println("Port 80 is now forwarded to port 9080.")
+	fmt.Println("Port 80 is now forwarded to port 9280.")
+	fmt.Printf("TLD '%s' saved to config.\n", tld)
+	fmt.Println()
 	fmt.Println("You can now run roost-dev without sudo:")
 	fmt.Println()
-	if tld == "localhost" {
-		fmt.Println("    roost-dev")
-	} else {
-		fmt.Printf("    roost-dev --tld %s\n", tld)
-	}
+	fmt.Println("    roost-dev")
 	fmt.Println()
 	fmt.Printf("Then access your apps at http://appname.%s\n", tld)
 	if needsUpdate {

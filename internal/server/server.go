@@ -22,6 +22,22 @@ func errorPage(msg string) string {
 	return asciiLogo + "\n" + msg + "\n"
 }
 
+func errorPageWithLogs(msg string, logs []string) string {
+	result := asciiLogo + "\n" + msg + "\n"
+	if len(logs) > 0 {
+		result += "\n--- Recent logs ---\n"
+		// Show last 20 lines
+		start := 0
+		if len(logs) > 20 {
+			start = len(logs) - 20
+		}
+		for _, line := range logs[start:] {
+			result += line + "\n"
+		}
+	}
+	return result
+}
+
 // Server is the main roost-dev server
 type Server struct {
 	cfg      *config.Config
@@ -155,7 +171,11 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request, app *config.A
 		// Start process if needed, then proxy
 		proc, err := s.ensureProcess(app.Name, app.Command, app.Dir, app.Env)
 		if err != nil {
-			http.Error(w, errorPage(fmt.Sprintf("Failed to start process: %v", err)), http.StatusInternalServerError)
+			var logs []string
+			if proc != nil {
+				logs = proc.Logs().Lines()
+			}
+			http.Error(w, errorPageWithLogs(fmt.Sprintf("Failed to start %s: %v", app.Name, err), logs), http.StatusInternalServerError)
 			return
 		}
 		proxy.NewReverseProxy(proc.Port).ServeHTTP(w, r)
@@ -165,10 +185,18 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request, app *config.A
 		proxy.NewStaticHandler(app.FilePath).ServeHTTP(w, r)
 
 	case config.AppTypeYAML:
-		// Multi-service app - default to first service or show list
+		// Multi-service app - use default service, first service, or show list
 		if len(app.Services) == 1 {
 			s.handleService(w, r, app, &app.Services[0])
 			return
+		}
+
+		// Check for a default service
+		for i := range app.Services {
+			if app.Services[i].Default {
+				s.handleService(w, r, app, &app.Services[i])
+				return
+			}
 		}
 
 		// Show available services
@@ -188,7 +216,11 @@ func (s *Server) handleService(w http.ResponseWriter, r *http.Request, app *conf
 
 	proc, err := s.ensureProcess(procName, svc.Command, svc.Dir, svc.Env)
 	if err != nil {
-		http.Error(w, errorPage(fmt.Sprintf("Failed to start service: %v", err)), http.StatusInternalServerError)
+		var logs []string
+		if proc != nil {
+			logs = proc.Logs().Lines()
+		}
+		http.Error(w, errorPageWithLogs(fmt.Sprintf("Failed to start service %s: %v", procName, err), logs), http.StatusInternalServerError)
 		return
 	}
 

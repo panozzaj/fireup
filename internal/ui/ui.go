@@ -48,7 +48,7 @@ const indexHTML = `<!DOCTYPE html>
             color: #fff;
         }
         h1 span {
-            color: #7c3aed;
+            color: #60a5fa;
         }
         .actions button {
             background: #333;
@@ -88,17 +88,17 @@ const indexHTML = `<!DOCTYPE html>
             width: 10px;
             height: 10px;
             border-radius: 50%%;
-            background: #666;
+            background: #6b7280;
         }
         .status-dot.running {
             background: #22c55e;
         }
         .status-dot.idle {
-            background: #666;
+            background: #6b7280;
         }
         .app-description {
             font-size: 13px;
-            color: #888;
+            color: #9ca3af;
             margin-left: 4px;
         }
         .external-link {
@@ -120,18 +120,19 @@ const indexHTML = `<!DOCTYPE html>
         }
         .app-type {
             font-size: 12px;
-            color: #888;
-            background: #333;
+            color: #d1d5db;
+            background: #374151;
             padding: 2px 8px;
             border-radius: 4px;
         }
         .app-url {
-            color: #7c3aed;
+            color: #60a5fa;
             text-decoration: none;
             font-size: 14px;
         }
         .app-url:hover {
             text-decoration: underline;
+            color: #93c5fd;
         }
         .app-meta {
             display: flex;
@@ -140,7 +141,7 @@ const indexHTML = `<!DOCTYPE html>
         }
         .app-port {
             font-size: 14px;
-            color: #888;
+            color: #9ca3af;
         }
         .app-actions {
             display: flex;
@@ -148,15 +149,15 @@ const indexHTML = `<!DOCTYPE html>
         }
         .app-actions button {
             background: transparent;
-            border: 1px solid #444;
-            color: #aaa;
+            border: 1px solid #4b5563;
+            color: #d1d5db;
             padding: 4px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
         }
         .app-actions button:hover {
-            background: #333;
+            background: #374151;
             color: #fff;
         }
         .app-actions button.stop {
@@ -186,6 +187,7 @@ const indexHTML = `<!DOCTYPE html>
         }
         .service-name {
             font-size: 14px;
+            color: #e5e7eb;
         }
         .logs-panel {
             background: #0f0f1a;
@@ -204,7 +206,7 @@ const indexHTML = `<!DOCTYPE html>
         }
         .logs-title {
             font-size: 14px;
-            color: #888;
+            color: #9ca3af;
         }
         .logs-content {
             font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
@@ -214,17 +216,17 @@ const indexHTML = `<!DOCTYPE html>
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
-            color: #aaa;
+            color: #d1d5db;
         }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #666;
+            color: #9ca3af;
         }
         .empty-state h2 {
             font-size: 18px;
             margin-bottom: 12px;
-            color: #888;
+            color: #d1d5db;
         }
         .empty-state code {
             display: block;

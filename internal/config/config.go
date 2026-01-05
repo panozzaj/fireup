@@ -41,6 +41,7 @@ type Service struct {
 	Command string
 	Port    int // Assigned dynamically
 	Env     map[string]string
+	Default bool // If true, this service handles requests to the base app URL
 }
 
 // AppType indicates how to handle the app
@@ -85,8 +86,8 @@ func (s *AppStore) Load() error {
 		name := entry.Name()
 		path := filepath.Join(s.cfg.Dir, name)
 
-		// Skip hidden files
-		if strings.HasPrefix(name, ".") {
+		// Skip hidden files and the global config file
+		if strings.HasPrefix(name, ".") || name == "config.json" {
 			continue
 		}
 
@@ -177,6 +178,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			Dir     string            `yaml:"dir"`
 			Command string            `yaml:"cmd"`
 			Env     map[string]string `yaml:"env"`
+			Default bool              `yaml:"default"`
 		} `yaml:"services"`
 	}
 
@@ -240,6 +242,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			Dir:     svcDir,
 			Command: svcCfg.Command,
 			Env:     svcCfg.Env,
+			Default: svcCfg.Default,
 		})
 	}
 
