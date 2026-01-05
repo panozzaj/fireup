@@ -80,10 +80,9 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Remove TLD
 	name := strings.TrimSuffix(host, "."+s.cfg.TLD)
 
-	// Check for service-app pattern
-	var serviceName string
+	// Check for service-app pattern (service-appname)
 	if idx := strings.Index(name, "-"); idx != -1 {
-		serviceName = name[:idx]
+		serviceName := name[:idx]
 		appName := name[idx+1:]
 
 		// Try to find as multi-service app
@@ -92,16 +91,16 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 			s.handleService(w, r, app, service)
 			return
 		}
-
-		// If not found as service, try the full name as a simple app
+		// If not found as service, continue to try other patterns
 	}
 
-	// Try as simple app name
-	app, found := s.apps.Get(name)
+	// Try progressively shorter names to support subdomains
+	// e.g., admin.mateams → try "admin.mateams", then "mateams"
+	app, found := s.findApp(name)
 	if !found {
 		// Reload config and try again
 		s.apps.Reload()
-		app, found = s.apps.Get(name)
+		app, found = s.findApp(name)
 	}
 
 	if !found {
@@ -110,6 +109,29 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.handleApp(w, r, app)
+}
+
+// findApp tries to find an app by progressively shorter names
+// e.g., "admin.mateams" → try "admin.mateams", then "mateams"
+func (s *Server) findApp(name string) (*config.App, bool) {
+	// Try exact match first
+	if app, found := s.apps.Get(name); found {
+		return app, true
+	}
+
+	// Try progressively shorter names (strip leading subdomain)
+	for {
+		idx := strings.Index(name, ".")
+		if idx == -1 {
+			break
+		}
+		name = name[idx+1:]
+		if app, found := s.apps.Get(name); found {
+			return app, true
+		}
+	}
+
+	return nil, false
 }
 
 // handleApp handles a request for a simple app
