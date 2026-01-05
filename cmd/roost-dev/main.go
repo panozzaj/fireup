@@ -241,8 +241,7 @@ EXAMPLES:
     roost-dev --tld test
 
     # Or run with sudo on port 80 directly (no setup needed)
-    sudo roost-dev --http-port 80 --advertise-port 80
-`)
+    sudo roost-dev --http-port 80 --advertise-port 80`)
 }
 
 const (

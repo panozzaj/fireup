@@ -10,3 +10,7 @@ pre-commit:
       glob: "*.go"
       run: gofmt -l -w {staged_files}
       stage_fixed: true
+
+    - name: go-test
+      glob: "*.go"
+      run: GOPATH="" go test ./...

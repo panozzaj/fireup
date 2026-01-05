@@ -24,11 +24,13 @@ type Process struct {
 	Port    int
 	Env     map[string]string
 
-	cmd     *exec.Cmd
-	cancel  context.CancelFunc
-	logs    *LogBuffer
-	started time.Time
-	mu      sync.Mutex
+	cmd       *exec.Cmd
+	cancel    context.CancelFunc
+	logs      *LogBuffer
+	started   time.Time
+	failed    bool
+	exitError string
+	mu        sync.Mutex
 }
 
 // LogBuffer stores recent log output
@@ -91,11 +93,15 @@ type Manager struct {
 
 // NewManager creates a new process manager
 func NewManager() *Manager {
+	portStart := 50000
+	portEnd := 60000
+	// Start from a random port to avoid conflicts with orphaned processes
+	nextPort := portStart + int(time.Now().UnixNano()%int64(portEnd-portStart))
 	return &Manager{
 		processes: make(map[string]*Process),
-		portStart: 50000,
-		portEnd:   60000,
-		nextPort:  50000,
+		portStart: portStart,
+		portEnd:   portEnd,
+		nextPort:  nextPort,
 	}
 }
 
@@ -207,10 +213,44 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 
 	// Monitor for exit
 	go func() {
-		cmd.Wait()
-		m.mu.Lock()
-		delete(m.processes, name)
-		m.mu.Unlock()
+		err := cmd.Wait()
+		proc.mu.Lock()
+		if err != nil {
+			proc.failed = true
+			// Get last few log lines for error context
+			lines := proc.logs.Lines()
+			var lastLines string
+			if len(lines) > 0 {
+				start := len(lines) - 3
+				if start < 0 {
+					start = 0
+				}
+				for _, l := range lines[start:] {
+					// Skip roost-dev internal messages
+					if !strings.HasPrefix(l, "[roost-dev]") {
+						if lastLines != "" {
+							lastLines += " | "
+						}
+						// Truncate long lines
+						if len(l) > 80 {
+							l = l[:77] + "..."
+						}
+						lastLines += l
+					}
+				}
+			}
+			if lastLines != "" {
+				proc.exitError = lastLines
+			} else if exitErr, ok := err.(*exec.ExitError); ok {
+				proc.exitError = fmt.Sprintf("exit code %d", exitErr.ExitCode())
+			} else {
+				proc.exitError = err.Error()
+			}
+			proc.logs.Write([]byte(fmt.Sprintf("[roost-dev] Process exited: %s\n", proc.exitError)))
+		}
+		proc.mu.Unlock()
+		// Don't delete failed processes so we can show their status
+		// They'll be replaced if started again
 	}()
 
 	m.processes[name] = proc
@@ -412,4 +452,18 @@ func (p *Process) Logs() *LogBuffer {
 // Uptime returns how long the process has been running
 func (p *Process) Uptime() time.Duration {
 	return time.Since(p.started)
+}
+
+// HasFailed returns true if the process exited with an error
+func (p *Process) HasFailed() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.failed
+}
+
+// ExitError returns the exit error message if the process failed
+func (p *Process) ExitError() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitError
 }

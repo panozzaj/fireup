@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/panozzaj/roost-dev/internal/config"
@@ -40,10 +41,10 @@ func errorPageWithLogs(msg string, logs []string) string {
 
 // Server is the main roost-dev server
 type Server struct {
-	cfg      *config.Config
-	apps     *config.AppStore
-	procs    *process.Manager
-	httpSrv  *http.Server
+	cfg     *config.Config
+	apps    *config.AppStore
+	procs   *process.Manager
+	httpSrv *http.Server
 }
 
 // New creates a new server
@@ -238,6 +239,35 @@ func (s *Server) ensureProcess(name, command, dir string, env map[string]string)
 	return s.procs.Start(name, command, dir, env)
 }
 
+// startByName starts a process by its name (e.g., "myapp" or "web-myapp" for services)
+func (s *Server) startByName(name string) {
+	// Try as a simple app first
+	if app, found := s.apps.Get(name); found {
+		if app.Type == config.AppTypeCommand {
+			s.procs.Start(app.Name, app.Command, app.Dir, nil)
+		}
+		return
+	}
+
+	// Try as a service (format: "service-appname")
+	for _, app := range s.apps.All() {
+		if app.Type != config.AppTypeYAML {
+			continue
+		}
+		for _, svc := range app.Services {
+			procName := fmt.Sprintf("%s-%s", svc.Name, app.Name)
+			if procName == name {
+				dir := app.Dir
+				if svc.Dir != "" {
+					dir = filepath.Join(app.Dir, svc.Dir)
+				}
+				s.procs.Start(procName, svc.Command, dir, svc.Env)
+				return
+			}
+		}
+	}
+}
+
 // handleDashboard serves the web UI
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
@@ -265,19 +295,43 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			proc, found := s.procs.Get(name)
 			if found {
 				s.procs.Restart(proc.Name)
+			} else {
+				// Try to start it fresh
+				s.startByName(name)
 			}
+		}
+		w.WriteHeader(http.StatusOK)
+
+	case "/api/start":
+		name := r.URL.Query().Get("name")
+		if name != "" {
+			s.startByName(name)
 		}
 		w.WriteHeader(http.StatusOK)
 
 	case "/api/logs":
 		name := r.URL.Query().Get("name")
-		proc, found := s.procs.Get(name)
-		if !found {
-			http.Error(w, "Process not found", http.StatusNotFound)
-			return
+		var allLogs []string
+
+		// Try direct process name first
+		if proc, found := s.procs.Get(name); found {
+			allLogs = proc.Logs().Lines()
+		} else {
+			// For multi-service apps, aggregate logs from all services
+			if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
+				for _, svc := range app.Services {
+					procName := fmt.Sprintf("%s-%s", svc.Name, app.Name)
+					if proc, found := s.procs.Get(procName); found {
+						for _, line := range proc.Logs().Lines() {
+							allLogs = append(allLogs, fmt.Sprintf("[%s] %s", svc.Name, line))
+						}
+					}
+				}
+			}
 		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(proc.Logs().Lines())
+		json.NewEncoder(w).Encode(allLogs)
 
 	default:
 		http.NotFound(w, r)
@@ -289,6 +343,8 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 	type serviceStatus struct {
 		Name    string `json:"name"`
 		Running bool   `json:"running"`
+		Failed  bool   `json:"failed,omitempty"`
+		Error   string `json:"error,omitempty"`
 		Port    int    `json:"port,omitempty"`
 		Uptime  string `json:"uptime,omitempty"`
 	}
@@ -299,6 +355,8 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 		Type        string          `json:"type"`
 		URL         string          `json:"url"`
 		Running     bool            `json:"running,omitempty"`
+		Failed      bool            `json:"failed,omitempty"`
+		Error       string          `json:"error,omitempty"`
 		Port        int             `json:"port,omitempty"`
 		Uptime      string          `json:"uptime,omitempty"`
 		Services    []serviceStatus `json:"services,omitempty"`
@@ -329,10 +387,15 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 
 		case config.AppTypeCommand:
 			as.Type = "command"
-			if proc, found := s.procs.Get(app.Name); found && proc.IsRunning() {
-				as.Running = true
-				as.Port = proc.Port
-				as.Uptime = proc.Uptime().Round(1e9).String()
+			if proc, found := s.procs.Get(app.Name); found {
+				if proc.IsRunning() {
+					as.Running = true
+					as.Port = proc.Port
+					as.Uptime = proc.Uptime().Round(1e9).String()
+				} else if proc.HasFailed() {
+					as.Failed = true
+					as.Error = proc.ExitError()
+				}
 			}
 
 		case config.AppTypeStatic:
@@ -341,13 +404,25 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 
 		case config.AppTypeYAML:
 			as.Type = "multi-service"
+			// Use default service URL if one exists
+			for _, svc := range app.Services {
+				if svc.Default {
+					as.URL = baseURL(fmt.Sprintf("%s-%s", svc.Name, app.Name))
+					break
+				}
+			}
 			for _, svc := range app.Services {
 				ss := serviceStatus{Name: svc.Name}
 				procName := fmt.Sprintf("%s-%s", svc.Name, app.Name)
-				if proc, found := s.procs.Get(procName); found && proc.IsRunning() {
-					ss.Running = true
-					ss.Port = proc.Port
-					ss.Uptime = proc.Uptime().Round(1e9).String()
+				if proc, found := s.procs.Get(procName); found {
+					if proc.IsRunning() {
+						ss.Running = true
+						ss.Port = proc.Port
+						ss.Uptime = proc.Uptime().Round(1e9).String()
+					} else if proc.HasFailed() {
+						ss.Failed = true
+						ss.Error = proc.ExitError()
+					}
 				}
 				as.Services = append(as.Services, ss)
 			}

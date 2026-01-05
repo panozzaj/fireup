@@ -47,9 +47,6 @@ const indexHTML = `<!DOCTYPE html>
             font-weight: 600;
             color: #fff;
         }
-        h1 span {
-            color: #60a5fa;
-        }
         .actions button {
             background: #333;
             color: #fff;
@@ -89,12 +86,28 @@ const indexHTML = `<!DOCTYPE html>
             height: 10px;
             border-radius: 50%%;
             background: #6b7280;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .status-dot:hover {
+            transform: scale(1.3);
         }
         .status-dot.running {
             background: #22c55e;
         }
+        .status-dot.failed {
+            background: #ef4444;
+        }
         .status-dot.idle {
             background: #6b7280;
+        }
+        .status-dot.starting {
+            background: #f59e0b;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%%, 100%% { opacity: 1; transform: scale(1); }
+            50%% { opacity: 0.5; transform: scale(1.2); }
         }
         .app-description {
             font-size: 13px;
@@ -189,6 +202,16 @@ const indexHTML = `<!DOCTYPE html>
             font-size: 14px;
             color: #e5e7eb;
         }
+        .app-error {
+            font-size: 12px;
+            color: #f87171;
+            display: block;
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 4px;
+            max-width: 500px;
+        }
         .logs-panel {
             background: #0f0f1a;
             border-top: 1px solid #333;
@@ -244,7 +267,7 @@ const indexHTML = `<!DOCTYPE html>
 <body>
     <div class="container">
         <header>
-            <h1><span>roost</span>-dev</h1>
+            <h1>roost-dev</h1>
             <div class="actions">
                 <button onclick="reload()">Reload Config</button>
             </div>
@@ -292,25 +315,32 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
 
             container.innerHTML = apps.map(app => {
                 const isRunning = app.running || (app.services && app.services.some(s => s.running));
-                const statusClass = isRunning ? 'running' : 'idle';
+                const hasFailed = app.failed || (app.services && app.services.some(s => s.failed));
+                const statusClass = hasFailed ? 'failed' : (isRunning ? 'running' : 'idle');
                 const displayName = app.description || app.name;
+
+                const getServiceStatus = (svc) => svc.failed ? 'failed' : (svc.running ? 'running' : 'idle');
 
                 let servicesHTML = '';
                 if (app.services && app.services.length > 0) {
                     servicesHTML = ` + "`" + `
                         <div class="services">
-                            ${app.services.map(svc => ` + "`" + `
+                            ${app.services.map(svc => {
+                                const svcStatus = getServiceStatus(svc);
+                                const svcName = svc.name + '-' + app.name;
+                                return ` + "`" + `
                                 <div class="service">
                                     <div class="service-info">
-                                        <div class="status-dot ${svc.running ? 'running' : 'idle'}"></div>
+                                        <div class="status-dot ${svcStatus}" onclick="event.stopPropagation(); toggleProcess('${svcName}', '${svcStatus}', event)" title="${svcStatus === 'running' ? 'Click to stop' : svcStatus === 'failed' ? 'Click to restart' : 'Click to start'}"></div>
                                         <span class="service-name">${svc.name}</span>
                                         ${svc.port ? ` + "`" + `<span class="app-port">:${svc.port}</span>` + "`" + ` : ''}
+                                        ${svc.error ? ` + "`" + `<span class="app-error">${svc.error}</span>` + "`" + ` : ''}
                                     </div>
                                     <a class="app-url external-link" href="http://${svc.name}-${app.name}.${TLD}${portSuffix}" target="_blank">
                                         ${svc.name}-${app.name}.${TLD} ${externalLinkIcon}
                                     </a>
                                 </div>
-                            ` + "`" + `).join('')}
+                            ` + "`" + `}).join('')}
                         </div>
                     ` + "`" + `;
                 }
@@ -319,7 +349,7 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                     <div class="app" data-name="${app.name}">
                         <div class="app-header" onclick="toggleLogs('${app.name}')">
                             <div class="app-info">
-                                <div class="status-dot ${statusClass}"></div>
+                                <div class="status-dot ${statusClass}" onclick="event.stopPropagation(); toggleProcess('${app.name}', '${statusClass}', event)" title="${statusClass === 'running' ? 'Click to stop' : statusClass === 'failed' ? 'Click to restart' : 'Click to start'}"></div>
                                 <span class="app-name">${displayName}</span>
                                 ${app.description ? ` + "`" + `<span class="app-description">(${app.name})</span>` + "`" + ` : ''}
                                 <span class="app-type">${app.type}</span>
@@ -389,6 +419,27 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
         async function restart(name) {
             await fetch('/api/restart?name=' + encodeURIComponent(name));
             fetchStatus();
+        }
+
+        async function start(name) {
+            await fetch('/api/start?name=' + encodeURIComponent(name));
+            fetchStatus();
+        }
+
+        async function toggleProcess(name, status, event) {
+            // Find the clicked dot and show starting animation
+            const dot = event ? event.target : null;
+            if (dot && (status === 'idle' || status === 'failed')) {
+                dot.className = 'status-dot starting';
+            }
+
+            if (status === 'running') {
+                await stop(name);
+            } else if (status === 'failed') {
+                await restart(name);
+            } else {
+                await start(name);
+            }
         }
 
         async function reload() {

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/anthony/Documents/dev/claude-hooks/scripts/PostToolUse/gofmt_changed_files"
+          }
+        ]
+      }
+    ]
+  }
+}
