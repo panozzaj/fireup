@@ -121,10 +121,10 @@ func (m *Manager) findFreePort() (int, error) {
 // Start starts a process
 func (m *Manager) Start(name, command, dir string, env map[string]string) (*Process, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	// Check if already running
 	if p, exists := m.processes[name]; exists && p.IsRunning() {
+		m.mu.Unlock()
 		return p, nil
 	}
 
@@ -136,6 +136,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	// Find a free port
 	port, err := m.findFreePort()
 	if err != nil {
+		m.mu.Unlock()
 		return nil, err
 	}
 
@@ -167,12 +168,14 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		m.mu.Unlock()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
+		m.mu.Unlock()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
 
@@ -191,6 +194,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	// Start process
 	if err := cmd.Start(); err != nil {
 		cancel()
+		m.mu.Unlock()
 		return nil, fmt.Errorf("start process: %w", err)
 	}
 
@@ -207,6 +211,9 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	}()
 
 	m.processes[name] = proc
+
+	// Release lock BEFORE waiting for port - this can take 30s and would block all requests
+	m.mu.Unlock()
 
 	// Wait for port to be ready
 	if err := waitForPort(port, 30*time.Second); err != nil {

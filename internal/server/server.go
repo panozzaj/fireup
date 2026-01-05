@@ -49,7 +49,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRequest)
 
-	addr := fmt.Sprintf(":%d", s.cfg.HTTPPort)
+	addr := fmt.Sprintf("127.0.0.1:%d", s.cfg.HTTPPort)
 	s.httpSrv = &http.Server{
 		Addr:    addr,
 		Handler: mux,

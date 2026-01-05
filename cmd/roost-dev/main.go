@@ -42,7 +42,7 @@ func main() {
 	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
 
 	flag.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
-	flag.IntVar(&httpPort, "http-port", 9080, "HTTP port to listen on")
+	flag.IntVar(&httpPort, "http-port", 9280, "HTTP port to listen on")
 	flag.IntVar(&httpsPort, "https-port", 9443, "HTTPS port to listen on")
 	flag.IntVar(&advertisePort, "advertise-port", 80, "Port to use in URLs (0 = same as http-port)")
 	flag.IntVar(&dnsPort, "dns-port", 9053, "DNS server port")
@@ -244,8 +244,8 @@ func runSetup(targetPort, dnsPort int, tld string) error {
 
 	// Create the pf anchor file
 	anchorContent := `# roost-dev port forwarding rules
-# Forward port 80 to 9080 for roost-dev
-rdr pass on lo0 inet proto tcp from any to any port 80 -> 127.0.0.1 port 9080
+# Forward port 80 to 9280 for roost-dev
+rdr pass on lo0 inet proto tcp from any to any port 80 -> 127.0.0.1 port 9280
 `
 	fmt.Printf("Creating %s...\n", pfAnchorPath)
 	if err := os.WriteFile(pfAnchorPath, []byte(anchorContent), 0644); err != nil {
