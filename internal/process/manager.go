@@ -228,7 +228,7 @@ func streamLogs(r io.Reader, logs *LogBuffer, name string) {
 	}
 }
 
-// cleanupRailsPID removes stale Rails PID files
+// cleanupRailsPID removes Rails PID files and kills orphaned processes
 func cleanupRailsPID(dir string) {
 	pidFile := filepath.Join(dir, "tmp", "pids", "server.pid")
 	data, err := os.ReadFile(pidFile)
@@ -258,7 +258,16 @@ func cleanupRailsPID(dir string) {
 		// Process doesn't exist, remove the stale PID file
 		os.Remove(pidFile)
 		fmt.Printf("[roost-dev] Removed stale PID file (pid %d not running): %s\n", pid, pidFile)
+		return
 	}
+
+	// Process IS running - this is likely an orphaned process from a previous roost-dev
+	// Kill it so we can start fresh
+	fmt.Printf("[roost-dev] Killing orphaned Rails process (pid %d)\n", pid)
+	process.Signal(syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	process.Signal(syscall.SIGKILL)
+	os.Remove(pidFile)
 }
 
 // waitForPort waits for a port to become available
