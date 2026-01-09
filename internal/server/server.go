@@ -486,14 +486,14 @@ func (s *Server) startByName(name string) {
 	if app, found := s.apps.Get(name); found {
 		switch app.Type {
 		case config.AppTypeCommand:
-			s.procs.Start(app.Name, app.Command, app.Dir, app.Env)
+			s.procs.StartAsync(app.Name, app.Command, app.Dir, app.Env)
 		case config.AppTypeYAML:
 			// Start all services for multi-service app, respecting depends_on
 			for i := range app.Services {
 				svc := &app.Services[i]
 				s.ensureDependencies(app, svc)
 				procName := fmt.Sprintf("%s-%s", svc.Name, app.Name)
-				s.procs.Start(procName, svc.Command, svc.Dir, svc.Env)
+				s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
 			}
 		}
 		return
@@ -510,7 +510,7 @@ func (s *Server) startByName(name string) {
 			if procName == name {
 				// Start dependencies first
 				s.ensureDependencies(app, svc)
-				s.procs.Start(procName, svc.Command, svc.Dir, svc.Env)
+				s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
 				return
 			}
 		}
@@ -573,7 +573,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 						s.procs.Restart(proc.Name)
 					} else {
 						s.ensureDependencies(app, svc)
-						s.procs.Start(procName, svc.Command, svc.Dir, svc.Env)
+						s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
 					}
 				}
 			} else {
