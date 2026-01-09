@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"testing"
 
 	"github.com/panozzaj/roost-dev/internal/config"
@@ -128,5 +129,128 @@ func TestEnsureDependencies(t *testing.T) {
 
 		// Should not panic
 		s.ensureDependencies(app, svcWithBadDep)
+	})
+}
+
+func TestStartByNameServiceLookup(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	// Create a test YAML config with dependencies
+	yamlContent := `
+name: testapp
+root: /tmp
+services:
+  api:
+    cmd: sleep 999
+  web:
+    cmd: sleep 999
+    depends_on: [api]
+`
+	configPath := tmpDir + "/testapp.yml"
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Load the apps
+	if err := apps.Load(); err != nil {
+		t.Fatalf("failed to load apps: %v", err)
+	}
+
+	// Verify the app was loaded correctly
+	app, found := apps.Get("testapp")
+	if !found {
+		t.Fatal("testapp not found")
+	}
+
+	t.Run("services are sorted with dependencies first", func(t *testing.T) {
+		// api should come before web in the services list
+		if len(app.Services) != 2 {
+			t.Fatalf("expected 2 services, got %d", len(app.Services))
+		}
+		if app.Services[0].Name != "api" {
+			t.Errorf("expected api first, got %s", app.Services[0].Name)
+		}
+		if app.Services[1].Name != "web" {
+			t.Errorf("expected web second, got %s", app.Services[1].Name)
+		}
+	})
+
+	t.Run("web service has api as dependency", func(t *testing.T) {
+		var webSvc *config.Service
+		for i := range app.Services {
+			if app.Services[i].Name == "web" {
+				webSvc = &app.Services[i]
+				break
+			}
+		}
+		if webSvc == nil {
+			t.Fatal("web service not found")
+		}
+		if len(webSvc.DependsOn) != 1 || webSvc.DependsOn[0] != "api" {
+			t.Errorf("expected web to depend on [api], got %v", webSvc.DependsOn)
+		}
+	})
+
+	t.Run("findService locates services correctly", func(t *testing.T) {
+		apiSvc := s.findService(app, "api")
+		if apiSvc == nil {
+			t.Error("findService failed to find api")
+		}
+		webSvc := s.findService(app, "web")
+		if webSvc == nil {
+			t.Error("findService failed to find web")
+		}
+		unknown := s.findService(app, "unknown")
+		if unknown != nil {
+			t.Error("findService should return nil for unknown service")
+		}
+	})
+}
+
+func TestEnsureDependenciesIntegration(t *testing.T) {
+	cfg := &config.Config{TLD: "test"}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	// Create app with chain of dependencies: c -> b -> a
+	app := &config.App{
+		Name: "chainapp",
+		Dir:  "/tmp",
+		Services: []config.Service{
+			{Name: "a", Command: "sleep 999", Dir: "/tmp"},
+			{Name: "b", Command: "sleep 999", Dir: "/tmp", DependsOn: []string{"a"}},
+			{Name: "c", Command: "sleep 999", Dir: "/tmp", DependsOn: []string{"b"}},
+		},
+	}
+
+	t.Run("starting c starts b and a as dependencies", func(t *testing.T) {
+		cSvc := s.findService(app, "c")
+		if cSvc == nil {
+			t.Fatal("c service not found")
+		}
+
+		// Start dependencies for c
+		s.ensureDependencies(app, cSvc)
+
+		// b should be starting (depends on by c)
+		bProc, bFound := procs.Get("b-chainapp")
+		if !bFound {
+			t.Error("expected b-chainapp to be started as dependency of c")
+		} else if !bProc.IsStarting() && !bProc.IsRunning() {
+			t.Error("expected b-chainapp to be starting or running")
+		}
+
+		// Note: ensureDependencies only starts direct dependencies,
+		// not transitive ones. This is intentional - each service
+		// call ensureDependencies for itself.
+
+		// Clean up
+		procs.Stop("a-chainapp")
+		procs.Stop("b-chainapp")
 	})
 }

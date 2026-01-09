@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/panozzaj/roost-dev/internal/config"
@@ -505,14 +504,13 @@ func (s *Server) startByName(name string) {
 		if app.Type != config.AppTypeYAML {
 			continue
 		}
-		for _, svc := range app.Services {
+		for i := range app.Services {
+			svc := &app.Services[i]
 			procName := fmt.Sprintf("%s-%s", svc.Name, app.Name)
 			if procName == name {
-				dir := app.Dir
-				if svc.Dir != "" {
-					dir = filepath.Join(app.Dir, svc.Dir)
-				}
-				s.procs.Start(procName, svc.Command, dir, svc.Env)
+				// Start dependencies first
+				s.ensureDependencies(app, svc)
+				s.procs.Start(procName, svc.Command, svc.Dir, svc.Env)
 				return
 			}
 		}
