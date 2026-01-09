@@ -112,6 +112,59 @@ sudo ./roost-dev --setup --tld test
 --cleanup             Remove pf rules and DNS (requires sudo)
 ```
 
+## Running as a Background Service (macOS)
+
+To have roost-dev start automatically on login and stay running:
+
+```bash
+# Build and install the binary
+go build -o ~/go/bin/roost-dev ./cmd/roost-dev
+
+# Create the LaunchAgent
+cat > ~/Library/LaunchAgents/com.roost-dev.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.roost-dev</string>
+    <key>Program</key>
+    <string>/Users/YOUR_USERNAME/go/bin/roost-dev</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/Library/Logs/roost-dev/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/Library/Logs/roost-dev/stderr.log</string>
+</dict>
+</plist>
+EOF
+
+# Replace YOUR_USERNAME with your actual username
+sed -i '' "s/YOUR_USERNAME/$USER/g" ~/Library/LaunchAgents/com.roost-dev.plist
+
+# Create logs directory
+mkdir -p ~/Library/Logs/roost-dev
+
+# Load the agent
+launchctl load ~/Library/LaunchAgents/com.roost-dev.plist
+```
+
+To manage the service:
+
+```bash
+# Stop
+launchctl unload ~/Library/LaunchAgents/com.roost-dev.plist
+
+# Start
+launchctl load ~/Library/LaunchAgents/com.roost-dev.plist
+
+# View logs
+tail -f ~/Library/Logs/roost-dev/stdout.log
+```
+
 ## License
 
 MIT
