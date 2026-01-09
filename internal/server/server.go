@@ -623,13 +623,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 		status := singleAppStatus{Status: "idle"}
 		if proc, found := s.procs.Get(name); found {
-			if proc.IsRunning() {
+			if proc.IsStarting() {
+				status.Status = "starting"
+			} else if proc.IsRunning() {
 				status.Status = "running"
 			} else if proc.HasFailed() {
 				status.Status = "failed"
 				status.Error = proc.ExitError()
-			} else if proc.IsStarting() {
-				status.Status = "starting"
 			}
 		}
 

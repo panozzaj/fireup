@@ -258,18 +258,37 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	proc.starting = true
 	m.processes[name] = proc
 
-	// Release lock BEFORE waiting for port - this can take 30s and would block all requests
+	// Release lock BEFORE waiting for port - this can take a while and would block all requests
 	m.mu.Unlock()
 
-	// Wait for port to be ready
-	if err := waitForPort(port, 30*time.Second); err != nil {
-		// Log warning but don't fail - process might take longer
-		logs.Write([]byte(fmt.Sprintf("[roost-dev] Warning: port %d not ready after 30s\n", port)))
-	}
+	// Wait for port to be ready (keep checking until port ready or process exits)
+	go func() {
+		for {
+			// Check if process has exited
+			if proc.cmd.ProcessState != nil {
+				proc.mu.Lock()
+				proc.starting = false
+				proc.mu.Unlock()
+				return
+			}
 
-	proc.mu.Lock()
-	proc.starting = false
-	proc.mu.Unlock()
+			// Check if port is ready
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				proc.mu.Lock()
+				proc.starting = false
+				proc.mu.Unlock()
+				return
+			}
+
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
+
+	// Wait up to 30s for initial startup, then return
+	// Process stays in "starting" state until port is actually ready
+	waitForPort(port, 30*time.Second)
 
 	return proc, nil
 }
@@ -402,14 +421,29 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	m.processes[name] = proc
 	m.mu.Unlock()
 
-	// Wait for port in background
+	// Wait for port in background (keep checking until port ready or process exits)
 	go func() {
-		if err := waitForPort(port, 30*time.Second); err != nil {
-			logs.Write([]byte(fmt.Sprintf("[roost-dev] Warning: port %d not ready after 30s\n", port)))
+		for {
+			// Check if process has exited
+			if proc.cmd.ProcessState != nil {
+				proc.mu.Lock()
+				proc.starting = false
+				proc.mu.Unlock()
+				return
+			}
+
+			// Check if port is ready
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				proc.mu.Lock()
+				proc.starting = false
+				proc.mu.Unlock()
+				return
+			}
+
+			time.Sleep(500 * time.Millisecond)
 		}
-		proc.mu.Lock()
-		proc.starting = false
-		proc.mu.Unlock()
 	}()
 
 	return proc, nil
@@ -581,6 +615,11 @@ func (p *Process) IsRunning() bool {
 	defer p.mu.Unlock()
 
 	if p.cmd == nil || p.cmd.Process == nil {
+		return false
+	}
+
+	// Still starting (waiting for port) - not "running" yet
+	if p.starting {
 		return false
 	}
 
