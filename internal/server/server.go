@@ -323,6 +323,56 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         const startTime = Date.now();
         const MIN_WAIT_MS = 500; // Brief wait before redirecting
 
+        // Convert ANSI escape codes to HTML spans (shared with dashboard)
+        function ansiToHtml(text) {
+            const colors = {
+                '30': '#000', '31': '#e74c3c', '32': '#2ecc71', '33': '#f1c40f',
+                '34': '#3498db', '35': '#9b59b6', '36': '#1abc9c', '37': '#ecf0f1',
+                '90': '#7f8c8d', '91': '#e74c3c', '92': '#2ecc71', '93': '#f1c40f',
+                '94': '#3498db', '95': '#9b59b6', '96': '#1abc9c', '97': '#fff'
+            };
+            let result = '';
+            let i = 0;
+            let openSpans = 0;
+            while (i < text.length) {
+                if (text[i] === '\x1b' && text[i+1] === '[') {
+                    let j = i + 2;
+                    while (j < text.length && text[j] !== 'm') j++;
+                    const codes = text.slice(i+2, j).split(';');
+                    i = j + 1;
+                    for (const code of codes) {
+                        if (code === '0' || code === '39' || code === '22' || code === '23') {
+                            if (openSpans > 0) { result += '</span>'; openSpans--; }
+                        } else if (colors[code]) {
+                            result += '<span style="color:' + colors[code] + '">';
+                            openSpans++;
+                        } else if (code === '1') {
+                            result += '<span style="font-weight:bold">';
+                            openSpans++;
+                        } else if (code === '3') {
+                            result += '<span style="font-style:italic">';
+                            openSpans++;
+                        }
+                    }
+                } else {
+                    // Escape HTML
+                    const c = text[i];
+                    if (c === '<') result += '&lt;';
+                    else if (c === '>') result += '&gt;';
+                    else if (c === '&') result += '&amp;';
+                    else result += c;
+                    i++;
+                }
+            }
+            while (openSpans-- > 0) result += '</span>';
+            return result;
+        }
+
+        // Strip ANSI escape codes for plain text display (status messages)
+        function stripAnsi(text) {
+            return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[\?25[hl]/g, '');
+        }
+
         async function poll() {
             console.log('poll() called');
             try {
@@ -338,7 +388,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                 // Update logs
                 if (lines && lines.length > 0) {
                     const content = document.getElementById('logs-content');
-                    content.textContent = lines.join('\n');
+                    content.innerHTML = ansiToHtml(lines.join('\n'));
                     // Auto-scroll if new lines
                     if (lines.length > lastLogCount) {
                         const logsDiv = document.getElementById('logs');
@@ -379,7 +429,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             console.log('showError() called with:', msg);
             document.getElementById('spinner').style.display = 'none';
             const statusEl = document.getElementById('status');
-            statusEl.textContent = 'Failed to start' + (msg ? ': ' + msg : '');
+            statusEl.textContent = 'Failed to start' + (msg ? ': ' + stripAnsi(msg) : '');
             statusEl.classList.add('error');
             const btn = document.getElementById('retry-btn');
             btn.style.display = 'inline-block';
@@ -456,7 +506,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                 .then(r => r.json())
                 .then(lines => {
                     if (lines && lines.length > 0) {
-                        document.getElementById('logs-content').textContent = lines.join('\n');
+                        document.getElementById('logs-content').innerHTML = ansiToHtml(lines.join('\n'));
                     }
                 });
         } else {
