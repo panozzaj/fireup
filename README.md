@@ -87,10 +87,10 @@ Some tools need multiple ports (e.g., Jekyll with livereload). Use shell arithme
 # ~/.config/roost-dev/blog.yml
 name: blog
 root: ~/projects/blog
-cmd: bundle exec jekyll serve --port $PORT --host 127.0.0.1 --livereload-port $((PORT + 10000)) --watch
+cmd: bundle exec jekyll serve --port $PORT --host 127.0.0.1 --livereload-port $((PORT + 1)) --watch
 ```
 
-Using a large offset (like 10000) avoids conflicts with manually-run instances that use default ports.
+Note: Port numbers must be under 65535, so keep offsets small when roost-dev assigns high ports (50000+).
 
 ## Subdomains
 
