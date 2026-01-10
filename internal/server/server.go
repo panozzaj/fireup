@@ -261,8 +261,18 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             btn.disabled = true;
             try {
                 await fetch('http://roost-dev.' + tld + '/api/restart?name=' + encodeURIComponent(appName));
-                // Brief delay then reload to see interstitial
-                setTimeout(() => location.reload(), 500);
+                // Reset UI to starting state
+                failed = false;
+                lastLogCount = 0;
+                document.getElementById('spinner').style.display = 'block';
+                document.getElementById('status').textContent = 'Starting...';
+                document.getElementById('status').classList.remove('error');
+                document.getElementById('logs-content').innerHTML = '<span class="logs-empty">Waiting for output...</span>';
+                btn.style.display = 'none';
+                btn.textContent = 'Restart';
+                btn.disabled = false;
+                // Start polling for new status
+                poll();
             } catch (e) {
                 btn.textContent = 'Restart';
                 btn.disabled = false;
