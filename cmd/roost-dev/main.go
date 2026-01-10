@@ -27,6 +27,18 @@ var (
 	version = "dev"
 )
 
+const asciiLogo = `                 __            __
+   _________  ____  _____/ /_      ____/ /__ _   __
+  / ___/ __ \/ __ \/ ___/ __/_____/ __  / _ \ | / /
+ / /  / /_/ / /_/ (__  ) /_/_____/ /_/ /  __/ |/ /
+/_/   \____/\____/____/\__/      \__,_/\___/|___/`
+
+func printLogo() {
+	if os.Getenv("CLAUDECODE") != "1" {
+		fmt.Println(asciiLogo)
+	}
+}
+
 func main() {
 	// Check for subcommands first (anything that doesn't start with -)
 	if len(os.Args) >= 2 && !strings.HasPrefix(os.Args[1], "-") {
@@ -155,13 +167,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if os.Getenv("CLAUDECODE") != "1" {
-		fmt.Println(`                 __            __
-   _________  ____  _____/ /_      ____/ /__ _   __
-  / ___/ __ \/ __ \/ ___/ __/_____/ __  / _ \ | / /
- / /  / /_/ / /_/ (__  ) /_/_____/ /_/ /  __/ |/ /
-/_/   \____/\____/____/\__/      \__,_/\___/|___/`)
-	}
+	printLogo()
 	fmt.Printf("roost-dev %s\n", version)
 	fmt.Printf("Configuration directory: %s\n", configDir)
 	fmt.Printf("Listening on http://127.0.0.1:%d\n", httpPort)
@@ -204,13 +210,7 @@ func main() {
 }
 
 func printUsage() {
-	if os.Getenv("CLAUDECODE") != "1" {
-		fmt.Println(`                 __            __
-   _________  ____  _____/ /_      ____/ /__ _   __
-  / ___/ __ \/ __ \/ ___/ __/_____/ __  / _ \ | / /
- / /  / /_/ / /_/ (__  ) /_/_____/ /_/ /  __/ |/ /
-/_/   \____/\____/____/\__/      \__,_/\___/|___/`)
-	}
+	printLogo()
 	fmt.Println(`
 roost-dev - Local development proxy for all your projects
 

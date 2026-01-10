@@ -64,12 +64,11 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             background: #1a1a2e;
             color: #eee;
             margin: 0;
-            padding: 40px;
+            padding: 60px 40px 40px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
         }
         .container {
             text-align: center;
@@ -88,9 +87,19 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         .logo a {
             color: #6b7280;
             text-decoration: none;
+            transition: color 0.3s;
         }
         .logo a:hover {
-            color: #3b82f6;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3, #54a0ff, #5f27cd);
+            background-size: 200%% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: rainbow 2s linear infinite;
+        }
+        @keyframes rainbow {
+            0%% { background-position: 0%% center; }
+            100%% { background-position: 200%% center; }
         }
         h1 {
             font-size: 24px;
