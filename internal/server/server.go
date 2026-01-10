@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/panozzaj/roost-dev/internal/config"
 	"github.com/panozzaj/roost-dev/internal/logo"
+	"github.com/panozzaj/roost-dev/internal/ollama"
 	"github.com/panozzaj/roost-dev/internal/process"
 	"github.com/panozzaj/roost-dev/internal/proxy"
 	"github.com/panozzaj/roost-dev/internal/ui"
@@ -213,6 +215,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         }
         .status.error {
             color: #f87171;
+            text-align: center;
         }
         .spinner {
             width: 40px;
@@ -253,6 +256,26 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         .logs-empty {
             color: var(--text-muted);
             font-style: italic;
+        }
+        .logs-content mark {
+            background: linear-gradient(90deg, #fef9c3 50%%, transparent 50%%);
+            background-size: 200%% 100%%;
+            background-position: 100%% 0;
+            color: inherit;
+            padding: 0;
+            border-radius: 2px;
+            animation: highlightSweep 0.5s ease-out forwards;
+        }
+        @keyframes highlightSweep {
+            from { background-position: 100%% 0; }
+            to { background-position: 0%% 0; }
+        }
+        @media (prefers-color-scheme: dark) {
+            .logs-content mark {
+                background: linear-gradient(90deg, #713f12 50%%, transparent 50%%);
+                background-size: 200%% 100%%;
+                background-position: 100%% 0;
+            }
         }
         .btn {
             background: var(--btn-bg);
@@ -371,6 +394,28 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         // Strip ANSI escape codes for plain text display (status messages)
         function stripAnsi(text) {
             return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[\?25[hl]/g, '');
+        }
+
+        // Analyze logs with Ollama to find error lines (async, updates UI when done)
+        async function analyzeLogsWithAI(lines) {
+            try {
+                const res = await fetch('http://roost-dev.' + tld + '/api/analyze-logs?name=' + encodeURIComponent(appName));
+                const data = await res.json();
+                if (!data.enabled || data.error || !data.errorLines || data.errorLines.length === 0) {
+                    return; // No highlighting needed
+                }
+
+                // Re-render logs with error lines highlighted
+                const errorSet = new Set(data.errorLines);
+                const content = document.getElementById('logs-content');
+                const highlighted = lines.map((line, idx) => {
+                    const html = ansiToHtml(line);
+                    return errorSet.has(idx) ? '<mark>' + html + '</mark>' : html;
+                }).join('\n');
+                content.innerHTML = highlighted;
+            } catch (e) {
+                console.log('AI analysis skipped:', e);
+            }
         }
 
         async function poll() {
@@ -507,6 +552,8 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                 .then(lines => {
                     if (lines && lines.length > 0) {
                         document.getElementById('logs-content').innerHTML = ansiToHtml(lines.join('\n'));
+                        // Async: ask AI to highlight error lines
+                        analyzeLogsWithAI(lines);
                     }
                 });
         } else {
@@ -536,6 +583,7 @@ type Server struct {
 	requestLog    *process.LogBuffer // Reuse LogBuffer for request logging
 	broadcaster   *Broadcaster       // SSE broadcaster for real-time updates
 	configWatcher *config.Watcher    // Watches config directory for changes
+	ollamaClient  *ollama.Client     // Optional LLM client for log analysis
 }
 
 // New creates a new server
@@ -551,6 +599,12 @@ func New(cfg *config.Config) (*Server, error) {
 		procs:       process.NewManager(),
 		requestLog:  process.NewLogBuffer(500), // Keep last 500 request log entries
 		broadcaster: NewBroadcaster(),
+	}
+
+	// Initialize Ollama client if configured
+	if cfg.Ollama != nil && cfg.Ollama.Enabled {
+		s.ollamaClient = ollama.New(cfg.Ollama.URL, cfg.Ollama.Model)
+		fmt.Printf("Ollama error analysis enabled (model: %s)\n", cfg.Ollama.Model)
 	}
 
 	// Set up config watcher
@@ -1097,6 +1151,42 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(status)
+
+	case "/api/analyze-logs":
+		// Use Ollama to identify error lines in logs
+		if s.ollamaClient == nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": false})
+			return
+		}
+
+		name := r.URL.Query().Get("name")
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+
+		var logs []string
+		if proc, found := s.procs.Get(name); found {
+			logs = proc.Logs().Lines()
+		}
+
+		if len(logs) == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "errorLines": []int{}})
+			return
+		}
+
+		// Run analysis async-ish but return result
+		errorLines, err := s.ollamaClient.AnalyzeLogs(context.Background(), logs)
+		if err != nil {
+			s.logRequest("Ollama analysis error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "error": err.Error()})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "errorLines": errorLines})
 
 	default:
 		http.NotFound(w, r)

@@ -19,6 +19,14 @@ type Config struct {
 	HTTPSPort int
 	URLPort   int // Port to use in generated URLs (for pf forwarding)
 	TLD       string
+	Ollama    *OllamaConfig
+}
+
+// OllamaConfig stores settings for local LLM error analysis
+type OllamaConfig struct {
+	Enabled bool
+	URL     string // e.g., "http://localhost:11434"
+	Model   string // e.g., "llama3.2"
 }
 
 // App represents a configured application

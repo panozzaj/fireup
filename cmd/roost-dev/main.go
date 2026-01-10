@@ -21,7 +21,15 @@ import (
 
 // GlobalConfig stores persistent settings
 type GlobalConfig struct {
-	TLD string `json:"tld"`
+	TLD    string        `json:"tld"`
+	Ollama *OllamaConfig `json:"ollama,omitempty"`
+}
+
+// OllamaConfig stores settings for local LLM error analysis
+type OllamaConfig struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`   // e.g., "http://localhost:11434"
+	Model   string `json:"model"` // e.g., "llama3.2"
 }
 
 var (
@@ -137,12 +145,24 @@ func main() {
 	if urlPort == 0 {
 		urlPort = httpPort
 	}
+
+	// Convert Ollama config
+	var ollamaCfg *config.OllamaConfig
+	if globalCfg.Ollama != nil && globalCfg.Ollama.Enabled {
+		ollamaCfg = &config.OllamaConfig{
+			Enabled: globalCfg.Ollama.Enabled,
+			URL:     globalCfg.Ollama.URL,
+			Model:   globalCfg.Ollama.Model,
+		}
+	}
+
 	cfg := &config.Config{
 		Dir:       configDir,
 		HTTPPort:  httpPort,
 		HTTPSPort: httpsPort,
 		URLPort:   urlPort,
 		TLD:       tld,
+		Ollama:    ollamaCfg,
 	}
 
 	// Create and start server
