@@ -615,6 +615,10 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                                             <button onclick="event.stopPropagation(); doRestart('${svcName}', event)">Restart</button>
                                             <button class="danger" onclick="event.stopPropagation(); doStop('${svcName}')">Stop</button>
                                         </div>` + "`" + ` : ''}
+                                        ${svcStatus === 'failed' ? ` + "`" + `<div class="status-menu" id="menu-${svcName}">
+                                            <button onclick="event.stopPropagation(); doRestart('${svcName}', event)">Restart</button>
+                                            <button onclick="event.stopPropagation(); doClear('${svcName}')">Clear</button>
+                                        </div>` + "`" + ` : ''}
                                     </div>
                                     <span class="service-name">${svc.name}</span>
                                     ${svc.port ? ` + "`" + `<span class="app-port">:${svc.port}</span>` + "`" + ` : ''}
@@ -638,6 +642,10 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                                 ${statusClass === 'running' ? ` + "`" + `<div class="status-menu" id="menu-${app.name}">
                                     <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
                                     <button class="danger" onclick="event.stopPropagation(); doStop('${app.name}')">Stop</button>
+                                </div>` + "`" + ` : ''}
+                                ${statusClass === 'failed' ? ` + "`" + `<div class="status-menu" id="menu-${app.name}">
+                                    <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
+                                    <button onclick="event.stopPropagation(); doClear('${app.name}')">Clear</button>
                                 </div>` + "`" + ` : ''}
                             </div>
                             <span class="app-name">${displayName}</span>
@@ -737,17 +745,13 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
             event.stopPropagation();
             closeAllMenus();
 
-            if (status === 'running') {
+            if (status === 'running' || status === 'failed') {
                 const menu = document.getElementById('menu-' + name);
                 if (menu) menu.classList.add('visible');
             } else {
                 const dot = event.target;
                 dot.className = 'status-dot starting';
-                if (status === 'failed') {
-                    restart(name);
-                } else {
-                    start(name);
-                }
+                start(name);
             }
         }
 
@@ -761,6 +765,12 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
 
         async function doStop(name) {
             closeAllMenus();
+            await stop(name);
+        }
+
+        async function doClear(name) {
+            closeAllMenus();
+            // Stop clears the failed state and turns it grey
             await stop(name);
         }
 
