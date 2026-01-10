@@ -33,6 +33,7 @@ type App struct {
 	FilePath    string    // For static file serving
 	Services    []Service // For multi-service YAML configs
 	Env         map[string]string
+	Hidden      bool // If true, hide from dashboard (still accessible via URL)
 }
 
 // Service represents a service within a multi-service app
@@ -176,8 +177,9 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		Aliases     []string          `yaml:"aliases"`
 		Alias       string            `yaml:"alias"` // Single alias shorthand
 		Root        string            `yaml:"root"`
-		Command     string            `yaml:"cmd"` // For single-service shorthand
-		Env         map[string]string `yaml:"env"` // For single-service shorthand
+		Command     string            `yaml:"cmd"`    // For single-service shorthand
+		Env         map[string]string `yaml:"env"`    // For single-service shorthand
+		Hidden      bool              `yaml:"hidden"` // Hide from dashboard
 		Services    map[string]struct {
 			Dir       string            `yaml:"dir"`
 			Command   string            `yaml:"cmd"`
@@ -220,6 +222,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			Command:     yamlCfg.Command,
 			Dir:         root,
 			Env:         yamlCfg.Env,
+			Hidden:      yamlCfg.Hidden,
 		}, nil
 	}
 
@@ -238,6 +241,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 				Command:     svcCfg.Command,
 				Dir:         svcDir,
 				Env:         svcCfg.Env,
+				Hidden:      yamlCfg.Hidden,
 			}, nil
 		}
 	}
@@ -276,6 +280,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		Type:        AppTypeYAML,
 		Dir:         root,
 		Services:    services,
+		Hidden:      yamlCfg.Hidden,
 	}, nil
 }
 

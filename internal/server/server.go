@@ -479,9 +479,19 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		host = host[:idx]
 	}
 
-	// Check for dashboard
+	// Check for dashboard or roost-dev subdomains (for test services)
 	if host == "roost-dev."+s.cfg.TLD || host == "roost-dev" {
 		s.handleDashboard(w, r)
+		return
+	}
+	if strings.HasSuffix(host, ".roost-dev."+s.cfg.TLD) {
+		// Subdomain of roost-dev.test → route to roost-dev-tests services
+		subdomain := strings.TrimSuffix(host, ".roost-dev."+s.cfg.TLD)
+		if app, svc, found := s.apps.GetService("roost-dev-tests", subdomain); found {
+			s.handleService(w, r, app, svc)
+			return
+		}
+		http.Error(w, errorPage(fmt.Sprintf("Service not found: %s\n\nAvailable at roost-dev-tests", subdomain)), http.StatusNotFound)
 		return
 	}
 
@@ -932,6 +942,8 @@ type serviceStatus struct {
 	Error    string `json:"error,omitempty"`
 	Port     int    `json:"port,omitempty"`
 	Uptime   string `json:"uptime,omitempty"`
+	Default  bool   `json:"default,omitempty"`
+	URL      string `json:"url,omitempty"`
 }
 
 type appStatus struct {
@@ -962,6 +974,9 @@ func (s *Server) getStatus() []byte {
 	}
 
 	for _, app := range s.apps.All() {
+		if app.Hidden {
+			continue
+		}
 		as := appStatus{
 			Name:        app.Name,
 			Description: app.Description,
@@ -999,8 +1014,16 @@ func (s *Server) getStatus() []byte {
 			as.Type = "multi-service"
 			// Keep base URL (app.test) - default service routes there automatically
 			for _, svc := range app.Services {
-				ss := serviceStatus{Name: svc.Name}
+				ss := serviceStatus{Name: svc.Name, Default: svc.Default}
 				procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+				// Set service URL
+				if app.Name == "roost-dev-tests" {
+					ss.URL = fmt.Sprintf("http://%s.roost-dev.%s", svc.Name, s.cfg.TLD)
+				} else if svc.Default {
+					ss.URL = baseURL(app.Name)
+				} else {
+					ss.URL = baseURL(fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name))
+				}
 				if proc, found := s.procs.Get(procName); found {
 					if proc.IsRunning() {
 						ss.Running = true
@@ -1091,6 +1114,8 @@ func (s *Server) getStatusJSON() []byte {
 		Error    string `json:"error,omitempty"`
 		Port     int    `json:"port,omitempty"`
 		Uptime   string `json:"uptime,omitempty"`
+		Default  bool   `json:"default,omitempty"`
+		URL      string `json:"url,omitempty"`
 	}
 
 	type appStatus struct {
@@ -1118,6 +1143,9 @@ func (s *Server) getStatusJSON() []byte {
 	}
 
 	for _, app := range s.apps.All() {
+		if app.Hidden {
+			continue
+		}
 		as := appStatus{
 			Name:        app.Name,
 			Description: app.Description,
@@ -1154,8 +1182,16 @@ func (s *Server) getStatusJSON() []byte {
 		case config.AppTypeYAML:
 			as.Type = "multi-service"
 			for _, svc := range app.Services {
-				ss := serviceStatus{Name: svc.Name}
+				ss := serviceStatus{Name: svc.Name, Default: svc.Default}
 				procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+				// Set service URL
+				if app.Name == "roost-dev-tests" {
+					ss.URL = fmt.Sprintf("http://%s.roost-dev.%s", svc.Name, s.cfg.TLD)
+				} else if svc.Default {
+					ss.URL = baseURL(app.Name)
+				} else {
+					ss.URL = baseURL(fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name))
+				}
 				if proc, found := s.procs.Get(procName); found {
 					if proc.IsRunning() {
 						ss.Running = true

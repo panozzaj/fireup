@@ -610,8 +610,8 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                                 <div class="service-meta">
                                     <span class="app-port">${svc.port ? ':' + svc.port : ''}</span>
                                     <span class="app-uptime">${svc.uptime || ''}</span>
-                                    <a class="app-url external-link" href="http://${svcName}.${TLD}${portSuffix}" target="_blank" rel="noopener">
-                                        ${svcName}.${TLD} ${externalLinkIcon}
+                                    <a class="app-url external-link" href="${svc.url}" target="_blank" rel="noopener">
+                                        ${svc.url.replace(/^https?:\/\//, '')} ${externalLinkIcon}
                                     </a>
                                 </div>
                             </div>
@@ -642,9 +642,9 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                         <div class="app-meta">
                             <span class="app-port">${app.port ? ':' + app.port : ''}</span>
                             <span class="app-uptime">${app.uptime || ''}</span>
-                            <a class="app-url external-link" href="${app.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                            ${(!(app.services && app.services.length) || (app.services && app.services.some(s => s.default))) ? ` + "`" + `<a class="app-url external-link" href="${app.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
                                 ${app.name}.${TLD} ${externalLinkIcon}
-                            </a>
+                            </a>` + "`" + ` : ''}
                         </div>
                     </div>
                     ${servicesHTML}
