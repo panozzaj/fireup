@@ -58,11 +58,35 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
     <meta charset="UTF-8">
     <title>%s %s</title>
     <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-logs: #0f172a;
+            --text-primary: #eee;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: #374151;
+            --btn-bg: #374151;
+            --btn-hover: #4b5563;
+            --logs-text: #d1d5db;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-primary: #f5f5f5;
+                --bg-logs: #ffffff;
+                --text-primary: #1a1a1a;
+                --text-secondary: #4b5563;
+                --text-muted: #6b7280;
+                --border-color: #e5e7eb;
+                --btn-bg: #e5e7eb;
+                --btn-hover: #d1d5db;
+                --logs-text: #374151;
+            }
+        }
         * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             margin: 0;
             padding: 60px 40px 40px;
             min-height: 100vh;
@@ -85,7 +109,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             -moz-osx-font-smoothing: grayscale;
         }
         .logo a {
-            color: #6b7280;
+            color: var(--text-muted);
             text-decoration: none;
             transition: color 0.3s;
         }
@@ -104,11 +128,11 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         h1 {
             font-size: 24px;
             margin: 0 0 16px 0;
-            color: #fff;
+            color: var(--text-primary);
         }
         .status {
             font-size: 16px;
-            color: #9ca3af;
+            color: var(--text-secondary);
             margin-bottom: 24px;
         }
         .status.error {
@@ -117,7 +141,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         .spinner {
             width: 40px;
             height: 40px;
-            border: 3px solid #374151;
+            border: 3px solid var(--border-color);
             border-top-color: #22c55e;
             border-radius: 50%%;
             animation: spin 1s linear infinite;
@@ -127,8 +151,8 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             to { transform: rotate(360deg); }
         }
         .logs {
-            background: #0f172a;
-            border: 1px solid #374151;
+            background: var(--bg-logs);
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 16px;
             text-align: left;
@@ -137,7 +161,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             margin-bottom: 24px;
         }
         .logs-title {
-            color: #9ca3af;
+            color: var(--text-secondary);
             font-size: 12px;
             margin-bottom: 8px;
         }
@@ -147,16 +171,16 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             line-height: 1.5;
             white-space: pre-wrap;
             word-break: break-all;
-            color: #d1d5db;
+            color: var(--logs-text);
             min-height: 100px;
         }
         .logs-empty {
-            color: #6b7280;
+            color: var(--text-muted);
             font-style: italic;
         }
         .btn {
-            background: #374151;
-            color: #fff;
+            background: var(--btn-bg);
+            color: var(--text-primary);
             border: none;
             padding: 10px 24px;
             border-radius: 6px;
@@ -164,10 +188,11 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             cursor: pointer;
         }
         .btn:hover {
-            background: #4b5563;
+            background: var(--btn-hover);
         }
         .btn-primary {
             background: #22c55e;
+            color: #fff;
         }
         .btn-primary:hover:not(:disabled) {
             background: #16a34a;
@@ -185,11 +210,11 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             align-items: center;
             position: sticky;
             top: -16px;
-            background: #0f172a;
+            background: var(--bg-logs);
             z-index: 1;
             margin: -16px -16px 8px -16px;
             padding: 16px 16px 8px 16px;
-            border-bottom: 1px solid #374151;
+            border-bottom: 1px solid var(--border-color);
         }
         .copy-btn {
             padding: 4px 12px;

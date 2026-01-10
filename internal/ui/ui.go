@@ -183,8 +183,8 @@ const indexHTML = `<!DOCTYPE html>
             transition: transform 0.1s;
         }
         .status-dot:hover {
-            transform: scale(1.5);
-            box-shadow: 0 0 8px currentColor;
+            transform: scale(1.2);
+            box-shadow: 0 0 6px currentColor;
         }
         .status-dot-wrapper {
             position: relative;
