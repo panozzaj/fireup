@@ -2,10 +2,10 @@ package styles
 
 import (
 	_ "embed"
+	"fmt"
 )
 
 // ThemeVars contains CSS custom properties for theming
-// These should be placed in the :root selector
 //
 //go:embed theme.css
 var ThemeVars string
@@ -20,14 +20,24 @@ var BaseStyles string
 //go:embed mark.css
 var MarkHighlight string
 
-// ThemeScript returns inline JavaScript to set theme before CSS loads
-// The %s placeholder should be replaced with the theme value
-const ThemeScript = `
-    <script>
-        (function() {
-            var theme = '%s';
-            if (theme && theme !== 'system') {
-                document.documentElement.setAttribute('data-theme', theme);
-            }
-        })();
-    </script>`
+// ThemeScript generates inline JavaScript to set theme before CSS loads
+func ThemeScript(theme string) string {
+	return fmt.Sprintf(`<script>
+(function() {
+    var theme = '%s';
+    if (theme && theme !== 'system') {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+})();
+</script>`, theme)
+}
+
+// HeadCSS generates the common CSS for the <head> section including theme vars and base styles
+func HeadCSS() string {
+	return ThemeVars + "\n" + BaseStyles
+}
+
+// LogsCSS generates CSS for logs display including mark highlighting
+func LogsCSS() string {
+	return MarkHighlight
+}

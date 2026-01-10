@@ -266,13 +266,6 @@ const indexHTML = `<!DOCTYPE html>
             font-weight: 600;
             font-size: 16px;
         }
-        .app-type {
-            font-size: 12px;
-            color: var(--text-secondary);
-            background: var(--tag-bg);
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
         .app-aliases {
             font-size: 12px;
             color: var(--text-muted);
@@ -655,7 +648,6 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                                 </div>
                             </div>
                             <span class="app-name">${displayName}</span>
-                            ${app.type !== 'multi-service' ? ` + "`" + `<span class="app-type">${app.type}</span>` + "`" + ` : ''}
                             ${app.aliases && app.aliases.length ? ` + "`" + `<span class="app-aliases">aka ${app.aliases.join(', ')}</span>` + "`" + ` : ''}
                         </div>
                         <div class="app-meta">
