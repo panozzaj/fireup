@@ -663,14 +663,69 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
             }
         }
 
+        // Check if user has selected text within an element
+        function hasSelectionIn(el) {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+            const range = sel.getRangeAt(0);
+            return el.contains(range.commonAncestorContainer);
+        }
+
+        // Convert ANSI escape codes to HTML spans
+        function ansiToHtml(text) {
+            const colors = {
+                '30': '#000', '31': '#e74c3c', '32': '#2ecc71', '33': '#f1c40f',
+                '34': '#3498db', '35': '#9b59b6', '36': '#1abc9c', '37': '#ecf0f1',
+                '90': '#7f8c8d', '91': '#e74c3c', '92': '#2ecc71', '93': '#f1c40f',
+                '94': '#3498db', '95': '#9b59b6', '96': '#1abc9c', '97': '#fff'
+            };
+            let result = '';
+            let i = 0;
+            let openSpans = 0;
+            while (i < text.length) {
+                if (text[i] === '\x1b' && text[i+1] === '[') {
+                    let j = i + 2;
+                    while (j < text.length && text[j] !== 'm') j++;
+                    const codes = text.slice(i+2, j).split(';');
+                    i = j + 1;
+                    for (const code of codes) {
+                        if (code === '0' || code === '39' || code === '22' || code === '23') {
+                            if (openSpans > 0) { result += '</span>'; openSpans--; }
+                        } else if (colors[code]) {
+                            result += '<span style="color:' + colors[code] + '">';
+                            openSpans++;
+                        } else if (code === '1') {
+                            result += '<span style="font-weight:bold">';
+                            openSpans++;
+                        } else if (code === '3') {
+                            result += '<span style="font-style:italic">';
+                            openSpans++;
+                        }
+                    }
+                } else {
+                    // Escape HTML
+                    const c = text[i];
+                    if (c === '<') result += '&lt;';
+                    else if (c === '>') result += '&gt;';
+                    else if (c === '&') result += '&amp;';
+                    else result += c;
+                    i++;
+                }
+            }
+            while (openSpans-- > 0) result += '</span>';
+            return result;
+        }
+
         async function fetchLogs(name) {
             try {
                 const res = await fetch('/api/logs?name=' + encodeURIComponent(name));
                 const lines = await res.json();
                 const content = document.getElementById('logs-content-' + name);
                 if (content) {
+                    // Skip update if user is selecting text in logs
+                    if (hasSelectionIn(content)) return;
                     const wasAtBottom = content.scrollHeight - content.scrollTop <= content.clientHeight + 50;
-                    content.textContent = (lines || []).join('\n');
+                    content.innerHTML = ansiToHtml((lines || []).join('\n'));
                     if (wasAtBottom) {
                         content.scrollTop = content.scrollHeight;
                     }
