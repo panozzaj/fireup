@@ -81,6 +81,9 @@ func main() {
 	flag.BoolVar(&showVer, "version", false, "Show version")
 	flag.BoolVar(&doSetup, "setup", false, "Setup pf rules for port forwarding (requires sudo)")
 	flag.BoolVar(&doCleanup, "cleanup", false, "Remove pf rules (requires sudo)")
+
+	// Use our custom usage function so flag errors show subcommands
+	flag.Usage = printUsage
 	flag.Parse()
 
 	// Load saved config for TLD default
@@ -456,6 +459,16 @@ func runCommand(cmd, appName string) error {
 		globalCfg = &GlobalConfig{TLD: "localhost"}
 	}
 
+	// Show action in progress
+	switch cmd {
+	case "start":
+		fmt.Printf("Starting %s...\n", appName)
+	case "stop":
+		fmt.Printf("Stopping %s...\n", appName)
+	case "restart":
+		fmt.Printf("Restarting %s...\n", appName)
+	}
+
 	// Make request to roost-dev API
 	url := fmt.Sprintf("http://roost-dev.%s/api/%s?name=%s", globalCfg.TLD, cmd, appName)
 	resp, err := http.Get(url)
@@ -468,7 +481,15 @@ func runCommand(cmd, appName string) error {
 		return fmt.Errorf("request failed with status %d", resp.StatusCode)
 	}
 
-	fmt.Printf("%s: %s\n", cmd, appName)
+	// Show completion message
+	switch cmd {
+	case "start":
+		fmt.Printf("%s started\n", appName)
+	case "stop":
+		fmt.Printf("%s stopped\n", appName)
+	case "restart":
+		fmt.Printf("%s restarted\n", appName)
+	}
 	return nil
 }
 
