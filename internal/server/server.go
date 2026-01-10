@@ -144,8 +144,12 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         .btn-primary {
             background: #22c55e;
         }
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background: #16a34a;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         .retry-btn {
             display: none;
@@ -227,8 +231,8 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                     return;
                 }
 
-                // Still starting, poll again
-                setTimeout(poll, 500);
+                // Still starting, poll again (fast for responsive UI)
+                setTimeout(poll, 200);
             } catch (e) {
                 console.error('Poll failed:', e);
                 setTimeout(poll, 1000);
