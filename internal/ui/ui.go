@@ -400,7 +400,7 @@ const indexHTML = `<!DOCTYPE html>
         }
         [data-theme="dark"] .logs-content mark,
         :root:not([data-theme="light"]) .logs-content mark {
-            background: linear-gradient(90deg, #713f12 50%%, transparent 50%%);
+            background: linear-gradient(90deg, #92702a 50%%, transparent 50%%);
             background-size: 200%% 100%%;
             background-position: 100%% 0;
         }
@@ -672,6 +672,7 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                             <span class="logs-title">Logs</span>
                             <div class="logs-actions">
                                 <button onclick="event.stopPropagation(); copyLogs('${app.name}', event)">Copy</button>
+                                <button onclick="event.stopPropagation(); copyForAgent('${app.name}', event)">Copy for agent</button>
                                 <button onclick="event.stopPropagation(); clearLogs('${app.name}')">Clear</button>
                             </div>
                         </div>
@@ -823,6 +824,37 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
 
             event.target.textContent = 'Copied!';
             setTimeout(() => event.target.textContent = 'Copy', 500);
+        }
+
+        function copyForAgent(name, event) {
+            const content = document.getElementById('logs-content-' + name);
+            const logs = content.textContent;
+            const app = currentApps.find(a => a.name === name);
+            const hasFailed = app && (app.failed || (app.services && app.services.some(s => s.failed)));
+
+            const bt = String.fromCharCode(96);
+            let context = 'I am using roost-dev, a local development server that manages apps via config files in ~/.config/roost-dev/.\n\n';
+            if (hasFailed) {
+                context += 'The app "' + name + '" failed to start. ';
+            } else {
+                context += 'The app "' + name + '" is having issues. ';
+            }
+            context += 'The config file is at:\n~/.config/roost-dev/' + name + '.yml\n\n' +
+                'Here are the logs:\n\n' +
+                bt+bt+bt + '\n' + logs + '\n' + bt+bt+bt + '\n\n' +
+                'Please help me understand and fix this error.';
+
+            const textarea = document.createElement('textarea');
+            textarea.value = context;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            event.target.textContent = 'Copied!';
+            setTimeout(() => event.target.textContent = 'Copy for agent', 500);
         }
 
         async function stop(name) {

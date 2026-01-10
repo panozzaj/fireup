@@ -328,13 +328,13 @@ func interstitialPage(appName, tld, theme string, failed bool, errorMsg string) 
         }
         @media (prefers-color-scheme: dark) {
             :root:not([data-theme="light"]) .logs-content mark {
-                background: linear-gradient(90deg, #713f12 50%%, transparent 50%%);
+                background: linear-gradient(90deg, #92702a 50%%, transparent 50%%);
                 background-size: 200%% 100%%;
                 background-position: 100%% 0;
             }
         }
         [data-theme="dark"] .logs-content mark {
-            background: linear-gradient(90deg, #713f12 50%%, transparent 50%%);
+            background: linear-gradient(90deg, #92702a 50%%, transparent 50%%);
             background-size: 200%% 100%%;
             background-position: 100%% 0;
         }
@@ -376,6 +376,10 @@ func interstitialPage(appName, tld, theme string, failed bool, errorMsg string) 
             padding: 16px 16px 8px 16px;
             border-bottom: 1px solid var(--border-color);
         }
+        .logs-buttons {
+            display: flex;
+            gap: 8px;
+        }
         .copy-btn {
             padding: 4px 12px;
             font-size: 12px;
@@ -392,7 +396,10 @@ func interstitialPage(appName, tld, theme string, failed bool, errorMsg string) 
         <div class="logs" id="logs">
             <div class="logs-header">
                 <div class="logs-title">Logs</div>
-                <button class="btn copy-btn" id="copy-btn" onclick="copyLogs()">Copy</button>
+                <div class="logs-buttons">
+                    <button class="btn copy-btn" id="copy-btn" onclick="copyLogs()">Copy</button>
+                    <button class="btn copy-btn" id="copy-agent-btn" onclick="copyForAgent()">Copy for agent</button>
+                </div>
             </div>
             <div class="logs-content" id="logs-content"><span class="logs-empty">Waiting for output...</span></div>
         </div>
@@ -566,6 +573,32 @@ func interstitialPage(appName, tld, theme string, failed bool, errorMsg string) 
 
             btn.textContent = 'Copied!';
             setTimeout(() => btn.textContent = 'Copy', 500);
+        }
+
+        function copyForAgent() {
+            const content = document.getElementById('logs-content');
+            const btn = document.getElementById('copy-agent-btn');
+            const logs = content.textContent;
+
+            const bt = String.fromCharCode(96);
+            const context = 'I am using roost-dev, a local development server that manages apps via config files in ~/.config/roost-dev/.\n\n' +
+                'The app "' + appName + '" failed to start. The config file is at:\n' +
+                '~/.config/roost-dev/' + appName + '.yml\n\n' +
+                'Here are the startup logs:\n\n' +
+                bt+bt+bt + '\n' + logs + '\n' + bt+bt+bt + '\n\n' +
+                'Please help me understand and fix this error.';
+
+            const textarea = document.createElement('textarea');
+            textarea.value = context;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy for agent', 500);
         }
 
         async function restartAndRetry() {
