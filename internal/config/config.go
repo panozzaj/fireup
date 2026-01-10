@@ -24,7 +24,8 @@ type Config struct {
 // App represents a configured application
 type App struct {
 	Name        string
-	Description string // Optional display name/description
+	Description string   // Optional display name/description
+	Aliases     []string // Alternative names for CLI/lookup
 	Type        AppType
 	Port        int       // For static port proxy
 	Command     string    // For command-based apps
@@ -172,6 +173,8 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 	var yamlCfg struct {
 		Name        string            `yaml:"name"`
 		Description string            `yaml:"description"`
+		Aliases     []string          `yaml:"aliases"`
+		Alias       string            `yaml:"alias"` // Single alias shorthand
 		Root        string            `yaml:"root"`
 		Command     string            `yaml:"cmd"` // For single-service shorthand
 		Env         map[string]string `yaml:"env"` // For single-service shorthand
@@ -201,11 +204,18 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		root = filepath.Join(home, root[1:])
 	}
 
+	// Merge alias and aliases
+	aliases := yamlCfg.Aliases
+	if yamlCfg.Alias != "" {
+		aliases = append(aliases, yamlCfg.Alias)
+	}
+
 	// Single-service shorthand: cmd at top level
 	if yamlCfg.Command != "" {
 		return &App{
 			Name:        appName,
 			Description: yamlCfg.Description,
+			Aliases:     aliases,
 			Type:        AppTypeCommand,
 			Command:     yamlCfg.Command,
 			Dir:         root,
@@ -223,6 +233,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			return &App{
 				Name:        appName,
 				Description: yamlCfg.Description,
+				Aliases:     aliases,
 				Type:        AppTypeCommand,
 				Command:     svcCfg.Command,
 				Dir:         svcDir,
@@ -255,6 +266,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 	return &App{
 		Name:        appName,
 		Description: yamlCfg.Description,
+		Aliases:     aliases,
 		Type:        AppTypeYAML,
 		Dir:         root,
 		Services:    services,
@@ -310,6 +322,28 @@ func (s *AppStore) Get(name string) (*App, bool) {
 	defer s.mu.RUnlock()
 	app, ok := s.apps[name]
 	return app, ok
+}
+
+// GetByNameOrAlias returns an app by name or alias
+func (s *AppStore) GetByNameOrAlias(nameOrAlias string) (*App, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Try direct name first
+	if app, ok := s.apps[nameOrAlias]; ok {
+		return app, true
+	}
+
+	// Search aliases
+	for _, app := range s.apps {
+		for _, alias := range app.Aliases {
+			if alias == nameOrAlias {
+				return app, true
+			}
+		}
+	}
+
+	return nil, false
 }
 
 // GetService returns a specific service from a multi-service app

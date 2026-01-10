@@ -158,15 +158,18 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 8px;
             position: sticky;
-            top: 0;
+            top: -16px;
             background: #0f172a;
             z-index: 1;
+            margin: -16px -16px 8px -16px;
+            padding: 16px 16px 8px 16px;
+            border-bottom: 1px solid #374151;
         }
         .copy-btn {
             padding: 4px 12px;
             font-size: 12px;
+            margin-top: -4px;
         }
     </style>
 </head>
@@ -195,6 +198,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         const MIN_WAIT_MS = 2000; // Wait at least 2 seconds before redirecting
 
         async function poll() {
+            console.log('poll() called');
             try {
                 // Fetch status and logs in parallel
                 const [statusRes, logsRes] = await Promise.all([
@@ -203,6 +207,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                 ]);
                 const status = await statusRes.json();
                 const lines = await logsRes.json();
+                console.log('poll() got status:', status.status, 'logs:', lines?.length || 0);
 
                 // Update logs
                 if (lines && lines.length > 0) {
@@ -231,6 +236,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
                     setTimeout(() => location.reload(), 300);
                     return;
                 } else if (status.status === 'failed') {
+                    console.log('poll() detected failed, calling showError');
                     showError(status.error);
                     return;
                 }
@@ -244,6 +250,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         }
 
         function showError(msg) {
+            console.log('showError() called with:', msg);
             document.getElementById('spinner').style.display = 'none';
             const statusEl = document.getElementById('status');
             statusEl.textContent = 'Failed to start' + (msg ? ': ' + msg : '');
@@ -252,6 +259,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
             btn.style.display = 'inline-block';
             btn.disabled = false;
             btn.textContent = 'Restart';
+            console.log('showError() done, button should be visible and enabled');
         }
 
         async function copyLogs() {
@@ -268,30 +276,36 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
 
         async function restartAndRetry() {
             const btn = document.getElementById('retry-btn');
+            const statusEl = document.getElementById('status');
             btn.textContent = 'Restarting...';
             btn.disabled = true;
+            statusEl.textContent = 'Restarting...';
+            statusEl.classList.remove('error');
+            document.getElementById('spinner').style.display = 'block';
+            document.getElementById('logs-content').innerHTML = '<span class="logs-empty">Restarting...</span>';
+
             try {
-                const res = await fetch('http://roost-dev.' + tld + '/api/restart?name=' + encodeURIComponent(appName));
+                const url = 'http://roost-dev.' + tld + '/api/restart?name=' + encodeURIComponent(appName);
+                const res = await fetch(url);
                 if (!res.ok) {
                     throw new Error('Restart API returned ' + res.status);
                 }
-                // Reset UI to starting state
+                // Reset state for fresh polling (but keep logs visible until new ones arrive)
                 failed = false;
                 lastLogCount = 0;
-                document.getElementById('spinner').style.display = 'block';
-                document.getElementById('status').textContent = 'Starting...';
-                document.getElementById('status').classList.remove('error');
-                document.getElementById('logs-content').innerHTML = '<span class="logs-empty">Waiting for output...</span>';
+                statusEl.textContent = 'Starting...';
                 btn.style.display = 'none';
                 btn.textContent = 'Restart';
                 btn.disabled = false;
-                // Wait for restart to complete (server has 500ms internal delay)
-                setTimeout(poll, 700);
+                // Start polling immediately - restart API already waited 500ms internally
+                poll();
             } catch (e) {
+                console.error('Restart failed:', e);
                 btn.textContent = 'Restart';
                 btn.disabled = false;
-                document.getElementById('status').textContent = 'Restart failed: ' + e.message;
-                console.error('Restart failed:', e);
+                statusEl.textContent = 'Restart failed: ' + e.message;
+                statusEl.classList.add('error');
+                document.getElementById('spinner').style.display = 'none';
             }
         }
 
@@ -711,6 +725,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	case "/api/stop":
 		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
 		if name != "" {
 			// Try direct process name first
 			if _, found := s.procs.Get(name); found {
@@ -728,9 +746,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	case "/api/restart":
 		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		s.logRequest("API restart called for: %s", name)
 		if name != "" {
 			// Try direct process name first
 			if proc, found := s.procs.Get(name); found {
+				s.logRequest("  Restarting process: %s", proc.Name)
 				s.procs.Restart(proc.Name)
 			} else if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
 				// Restart all services for multi-service app
@@ -754,6 +778,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	case "/api/start":
 		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
 		if name != "" {
 			s.startByName(name)
 			s.broadcastStatus()
@@ -762,6 +790,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	case "/api/logs":
 		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
 		var allLogs []string
 
 		// Try direct process name first
@@ -791,6 +823,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	case "/api/app-status":
 		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
 		type singleAppStatus struct {
 			Status string `json:"status"` // idle, starting, running, failed
 			Error  string `json:"error,omitempty"`
@@ -862,6 +898,7 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 	type appStatus struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description,omitempty"`
+		Aliases     []string        `json:"aliases,omitempty"`
 		Type        string          `json:"type"`
 		URL         string          `json:"url"`
 		Running     bool            `json:"running,omitempty"`
@@ -887,6 +924,7 @@ func (s *Server) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 		as := appStatus{
 			Name:        app.Name,
 			Description: app.Description,
+			Aliases:     app.Aliases,
 			URL:         baseURL(app.Name),
 		}
 
@@ -1009,6 +1047,7 @@ func (s *Server) getStatusJSON() []byte {
 	type appStatus struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description,omitempty"`
+		Aliases     []string        `json:"aliases,omitempty"`
 		Type        string          `json:"type"`
 		URL         string          `json:"url"`
 		Running     bool            `json:"running,omitempty"`
@@ -1033,6 +1072,7 @@ func (s *Server) getStatusJSON() []byte {
 		as := appStatus{
 			Name:        app.Name,
 			Description: app.Description,
+			Aliases:     app.Aliases,
 			URL:         baseURL(app.Name),
 		}
 

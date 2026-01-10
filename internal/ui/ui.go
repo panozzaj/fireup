@@ -274,6 +274,11 @@ const indexHTML = `<!DOCTYPE html>
             padding: 2px 8px;
             border-radius: 4px;
         }
+        .app-aliases {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
         .app-url {
             color: var(--accent-blue);
             text-decoration: none;
@@ -638,6 +643,7 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                             <span class="app-name">${displayName}</span>
                             ${app.description ? ` + "`" + `<span class="app-description">(${app.name})</span>` + "`" + ` : ''}
                             <span class="app-type">${app.type}</span>
+                            ${app.aliases && app.aliases.length ? ` + "`" + `<span class="app-aliases">aka ${app.aliases.join(', ')}</span>` + "`" + ` : ''}
                         </div>
                         <div class="app-meta">
                             ${app.port ? ` + "`" + `<span class="app-port">:${app.port}</span>` + "`" + ` : ''}
