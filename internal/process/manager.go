@@ -573,11 +573,36 @@ func (m *Manager) Restart(name string) (*Process, error) {
 	// Stop
 	m.Stop(name)
 
-	// Wait a moment
-	time.Sleep(500 * time.Millisecond)
+	// Brief wait for port release
+	time.Sleep(100 * time.Millisecond)
 
 	// Start again
 	return m.Start(name, command, dir, env)
+}
+
+// RestartAsync restarts a process without blocking
+func (m *Manager) RestartAsync(name string) {
+	m.mu.RLock()
+	proc, exists := m.processes[name]
+	m.mu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	// Capture config before stopping
+	command := proc.Command
+	dir := proc.Dir
+	env := proc.Env
+
+	// Stop
+	m.Stop(name)
+
+	// Start again asynchronously after brief delay
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		m.Start(name, command, dir, env)
+	}()
 }
 
 // Get returns a process by name

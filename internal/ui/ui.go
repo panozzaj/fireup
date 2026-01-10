@@ -253,19 +253,6 @@ const indexHTML = `<!DOCTYPE html>
             color: var(--text-muted);
             margin-left: 4px;
         }
-        .external-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .external-link svg {
-            width: 12px;
-            height: 12px;
-            opacity: 0.7;
-        }
-        .external-link:hover svg {
-            opacity: 1;
-        }
         .app-name {
             font-weight: 600;
             font-size: 16px;
@@ -306,7 +293,7 @@ const indexHTML = `<!DOCTYPE html>
             min-width: 40px;
         }
         .services {
-            padding: 0 20px 16px 42px;
+            padding: 0 8px 16px 42px;
         }
         .service {
             display: flex;
@@ -439,8 +426,6 @@ const indexHTML = `<!DOCTYPE html>
         let currentApps = [];
         let expandedLogs = null;
         let eventSource = null;
-
-        const externalLinkIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd" /><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd" /></svg>';
 
         // Convert name to URL-safe slug (spaces to dashes, lowercase)
         function slugify(name) {
@@ -610,8 +595,8 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                                 <div class="service-meta">
                                     <span class="app-port">${svc.port ? ':' + svc.port : ''}</span>
                                     <span class="app-uptime">${svc.uptime || ''}</span>
-                                    <a class="app-url external-link" href="${svc.url}" target="_blank" rel="noopener">
-                                        ${svc.url.replace(/^https?:\/\//, '')} ${externalLinkIcon}
+                                    <a class="app-url" href="${svc.url}" target="_blank" rel="noopener">
+                                        ${svc.url.replace(/^https?:\/\//, '')}
                                     </a>
                                 </div>
                             </div>
@@ -642,8 +627,8 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                         <div class="app-meta">
                             <span class="app-port">${app.port ? ':' + app.port : ''}</span>
                             <span class="app-uptime">${app.uptime || ''}</span>
-                            ${(!(app.services && app.services.length) || (app.services && app.services.some(s => s.default))) ? ` + "`" + `<a class="app-url external-link" href="${app.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
-                                ${app.name}.${TLD} ${externalLinkIcon}
+                            ${(!(app.services && app.services.length) || (app.services && app.services.some(s => s.default))) ? ` + "`" + `<a class="app-url" href="${app.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                                ${app.name}.${TLD}
                             </a>` + "`" + ` : ''}
                         </div>
                     </div>

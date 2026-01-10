@@ -245,7 +245,7 @@ func interstitialPage(appName, tld string, failed bool, errorMsg string) string 
         let failed = %t;
         let lastLogCount = 0;
         const startTime = Date.now();
-        const MIN_WAIT_MS = 2000; // Wait at least 2 seconds before redirecting
+        const MIN_WAIT_MS = 500; // Brief wait before redirecting
 
         async function poll() {
             console.log('poll() called');
@@ -831,14 +831,14 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			// Try direct process name first
 			if proc, found := s.procs.Get(name); found {
 				s.logRequest("  Restarting process: %s", proc.Name)
-				s.procs.Restart(proc.Name)
+				s.procs.RestartAsync(proc.Name)
 			} else if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
 				// Restart all services for multi-service app
 				for i := range app.Services {
 					svc := &app.Services[i]
 					procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
 					if proc, found := s.procs.Get(procName); found {
-						s.procs.Restart(proc.Name)
+						s.procs.RestartAsync(proc.Name)
 					} else {
 						s.ensureDependencies(app, svc)
 						s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)

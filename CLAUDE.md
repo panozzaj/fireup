@@ -6,7 +6,23 @@ There are TWO versions of roost-dev:
 1. **Installed version**: `/Users/anthony/go/bin/roost-dev` (managed by launchd)
 2. **Local build**: `/Users/anthony/Documents/dev/roost-dev/roost-dev`
 
-### During development, use the local build:
+### Option 1: Use air for hot-reloading (recommended)
+
+[air](https://github.com/air-verse/air) watches for file changes and auto-rebuilds. Config is in `.air.toml`.
+
+```bash
+# Install air (one-time)
+go install github.com/air-verse/air@latest
+
+# Stop the launchd-managed version and any running instances
+launchctl bootout gui/$(id -u)/com.roost-dev 2>/dev/null || true
+pkill -9 roost-dev 2>/dev/null || true
+
+# Run with air (auto-rebuilds on file changes)
+air
+```
+
+### Option 2: Manual build
 
 ```bash
 # Stop the launchd-managed version and any running instances
