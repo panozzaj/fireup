@@ -667,6 +667,9 @@ func (s *Server) startByName(name string) {
 			s.procs.StartAsync(app.Name, app.Command, app.Dir, app.Env)
 		case config.AppTypeYAML:
 			// Start all services for multi-service app, respecting depends_on
+			// TODO: Consider pre-allocating ports and passing PORT_<SERVICE> env vars
+			// to each service, so they can reference each other's ports directly.
+			// Example: frontend could use $PORT_API to connect to the api service.
 			for i := range app.Services {
 				svc := &app.Services[i]
 				s.ensureDependencies(app, svc)
