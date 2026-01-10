@@ -1,0 +1,23 @@
+/* AI-highlighted log lines with sweep animation */
+.logs-content mark {
+    background: linear-gradient(90deg, #fef9c3 50%, transparent 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0;
+    color: inherit;
+    padding: 0;
+    border-radius: 2px;
+    animation: highlightSweep 0.5s ease-out forwards;
+}
+
+@keyframes highlightSweep {
+    from { background-position: 100% 0; }
+    to { background-position: 0% 0; }
+}
+
+/* Dark mode mark highlighting */
+[data-theme="dark"] .logs-content mark,
+:root:not([data-theme="light"]) .logs-content mark {
+    background: linear-gradient(90deg, #713f12 50%, transparent 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0;
+}

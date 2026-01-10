@@ -384,6 +384,25 @@ const indexHTML = `<!DOCTYPE html>
             word-break: break-all;
             color: var(--text-secondary);
         }
+        .logs-content mark {
+            background: linear-gradient(90deg, #fef9c3 50%%, transparent 50%%);
+            background-size: 200%% 100%%;
+            background-position: 100%% 0;
+            color: inherit;
+            padding: 0;
+            border-radius: 2px;
+            animation: highlightSweep 0.5s ease-out forwards;
+        }
+        @keyframes highlightSweep {
+            from { background-position: 100%% 0; }
+            to { background-position: 0%% 0; }
+        }
+        [data-theme="dark"] .logs-content mark,
+        :root:not([data-theme="light"]) .logs-content mark {
+            background: linear-gradient(90deg, #713f12 50%%, transparent 50%%);
+            background-size: 200%% 100%%;
+            background-position: 100%% 0;
+        }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -671,7 +690,10 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
             if (!isVisible) {
                 panel.classList.add('visible');
                 expandedLogs = name;
-                await fetchLogs(name);
+                // Check if this app has failed to trigger AI analysis
+                const app = currentApps.find(a => a.name === name);
+                const hasFailed = app && (app.failed || (app.services && app.services.some(s => s.failed)));
+                await fetchLogs(name, hasFailed);
             } else {
                 expandedLogs = null;
             }
@@ -730,7 +752,28 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
             return result;
         }
 
-        async function fetchLogs(name) {
+        // Analyze logs with Ollama to find error lines (async, updates UI when done)
+        async function analyzeLogsWithAI(name, lines) {
+            try {
+                const res = await fetch('/api/analyze-logs?name=' + encodeURIComponent(name));
+                const data = await res.json();
+                if (!data.enabled || data.error || !data.errorLines || data.errorLines.length === 0) {
+                    return;
+                }
+                const content = document.getElementById('logs-content-' + name);
+                if (!content || hasSelectionIn(content)) return;
+                const errorSet = new Set(data.errorLines);
+                const highlighted = lines.map((line, idx) => {
+                    const html = ansiToHtml(line);
+                    return errorSet.has(idx) ? '<mark>' + html + '</mark>' : html;
+                }).join('\n');
+                content.innerHTML = highlighted;
+            } catch (e) {
+                console.log('AI analysis skipped:', e);
+            }
+        }
+
+        async function fetchLogs(name, triggerAnalysis = false) {
             try {
                 const res = await fetch('/api/logs?name=' + encodeURIComponent(name));
                 const lines = await res.json();
@@ -742,6 +785,10 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                     content.innerHTML = ansiToHtml((lines || []).join('\n'));
                     if (wasAtBottom) {
                         content.scrollTop = content.scrollHeight;
+                    }
+                    // Trigger AI analysis for failed apps
+                    if (triggerAnalysis && lines && lines.length > 0) {
+                        analyzeLogsWithAI(name, lines);
                     }
                 }
             } catch (e) {
