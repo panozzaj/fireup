@@ -44,9 +44,16 @@ func printLogo() {
 }
 
 func main() {
+	// Track if we should start the server
+	runServer := false
+
 	// Check for subcommands first (anything that doesn't start with -)
 	if len(os.Args) >= 2 && !strings.HasPrefix(os.Args[1], "-") {
 		switch os.Args[1] {
+		case "serve":
+			// Remove "serve" from args so flag parsing works
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+			runServer = true
 		case "start", "stop", "restart":
 			if len(os.Args) < 3 {
 				fmt.Fprintf(os.Stderr, "Usage: roost-dev %s <app-name>\n", os.Args[1])
@@ -138,6 +145,12 @@ func main() {
 		if err := runCleanup(tld); err != nil {
 			log.Fatalf("Cleanup failed: %v", err)
 		}
+		os.Exit(0)
+	}
+
+	// If no serve command and no special flags, show help
+	if !runServer {
+		printUsage()
 		os.Exit(0)
 	}
 
@@ -243,10 +256,10 @@ func printUsage() {
 roost-dev - Local development proxy for all your projects
 
 USAGE:
-    roost-dev [OPTIONS]
-    roost-dev <command> <app-name>
+    roost-dev <command> [options]
 
 COMMANDS:
+    serve           Start the roost-dev server
     list, ls        List configured apps and their status
     start <app>     Start an app
     stop <app>      Stop an app
@@ -302,23 +315,26 @@ SETUP (recommended):
     # Or setup for .test TLD (pf rules + DNS resolver)
     sudo roost-dev --setup --tld test
 
-    # Then just run roost-dev (no sudo needed)
-    roost-dev              # for .localhost
-    roost-dev --tld test   # for .test
+    # Then start the server (no sudo needed)
+    roost-dev serve              # for .localhost
+    roost-dev serve --tld test   # for .test
 
     # Remove configuration
     sudo roost-dev --cleanup
     sudo roost-dev --cleanup --tld test
 
 EXAMPLES:
-    # After running --setup, just start roost-dev
-    roost-dev
+    # After running --setup, start the server
+    roost-dev serve
 
     # Use .test TLD (requires setup with --tld test first)
-    roost-dev --tld test
+    roost-dev serve --tld test
 
     # Or run with sudo on port 80 directly (no setup needed)
-    sudo roost-dev --http-port 80 --advertise-port 80`)
+    sudo roost-dev serve --http-port 80 --advertise-port 80
+
+    # List all configured apps
+    roost-dev list`)
 }
 
 const (

@@ -146,8 +146,11 @@ cat > ~/Library/LaunchAgents/com.roost-dev.plist << 'EOF'
 <dict>
     <key>Label</key>
     <string>com.roost-dev</string>
-    <key>Program</key>
-    <string>/Users/YOUR_USERNAME/go/bin/roost-dev</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USERNAME/go/bin/roost-dev</string>
+        <string>serve</string>
+    </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
