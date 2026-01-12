@@ -86,6 +86,8 @@ func main() {
 		cmdInstall(args)
 	case "uninstall":
 		cmdUninstall(args)
+	case "service":
+		cmdService(args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\nRun 'roost-dev help' for usage.\n", cmd)
 		os.Exit(1)
@@ -108,6 +110,7 @@ COMMANDS:
     restart <app>     Restart an app
     install           Setup port forwarding (requires sudo)
     uninstall         Remove port forwarding config (requires sudo)
+    service           Manage roost-dev as a background service
     help              Show this help
     version           Show version
 
@@ -116,8 +119,8 @@ Run 'roost-dev <command> --help' for command-specific options.
 QUICK START:
     sudo roost-dev install        # One-time setup
     roost-dev serve               # Start the server
-    echo "npm start" > ~/.config/roost-dev/myapp
-    # Visit http://myapp.localhost`)
+    open http://roost-test.localhost   # Verify it's working
+    open http://roost-dev.localhost    # Open dashboard`)
 }
 
 // cmdServe handles the 'serve' command
@@ -436,6 +439,259 @@ EXAMPLES:
 	if err := runCleanup(tld); err != nil {
 		log.Fatalf("Uninstall failed: %v", err)
 	}
+}
+
+// cmdService handles the 'service' command for managing roost-dev as a background service
+func cmdService(args []string) {
+	if len(args) == 0 {
+		printServiceUsage()
+		os.Exit(0)
+	}
+
+	subcmd := args[0]
+	subargs := args[1:]
+
+	switch subcmd {
+	case "install":
+		cmdServiceInstall(subargs)
+	case "uninstall":
+		cmdServiceUninstall(subargs)
+	case "status":
+		cmdServiceStatus(subargs)
+	case "-h", "--help", "help":
+		printServiceUsage()
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown service command: %s\n\n", subcmd)
+		printServiceUsage()
+		os.Exit(1)
+	}
+}
+
+func printServiceUsage() {
+	fmt.Println(`roost-dev service - Manage roost-dev as a background service
+
+USAGE:
+    roost-dev service <command>
+
+COMMANDS:
+    install     Install and start roost-dev as a LaunchAgent (runs on login)
+    uninstall   Stop and remove the LaunchAgent
+    status      Show service status
+
+DESCRIPTION:
+    Sets up roost-dev to run automatically in the background via macOS LaunchAgent.
+    The service will start on login and restart automatically if it crashes.
+
+EXAMPLES:
+    roost-dev service install     # Start running in background
+    roost-dev service status      # Check if it's running
+    roost-dev service uninstall   # Stop background service`)
+}
+
+func cmdServiceInstall(args []string) {
+	// Check for help
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev service install - Install roost-dev as a background service
+
+USAGE:
+    roost-dev service install
+
+Installs a LaunchAgent that runs 'roost-dev serve' automatically on login.
+Logs are written to ~/Library/Logs/roost-dev/`)
+			os.Exit(0)
+		}
+	}
+
+	if err := runServiceInstall(); err != nil {
+		log.Fatalf("Service install failed: %v", err)
+	}
+}
+
+func cmdServiceUninstall(args []string) {
+	// Check for help
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev service uninstall - Remove roost-dev background service
+
+USAGE:
+    roost-dev service uninstall
+
+Stops roost-dev and removes the LaunchAgent.`)
+			os.Exit(0)
+		}
+	}
+
+	if err := runServiceUninstall(); err != nil {
+		log.Fatalf("Service uninstall failed: %v", err)
+	}
+}
+
+func cmdServiceStatus(args []string) {
+	// Check for help
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev service status - Show service status
+
+USAGE:
+    roost-dev service status
+
+Shows whether the LaunchAgent is installed and running.`)
+			os.Exit(0)
+		}
+	}
+
+	runServiceStatus()
+}
+
+func getUserLaunchAgentPath() string {
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, "Library", "LaunchAgents", "com.roost-dev.plist")
+}
+
+func runServiceInstall() error {
+	homeDir, _ := os.UserHomeDir()
+	plistPath := getUserLaunchAgentPath()
+	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
+
+	// Find roost-dev binary
+	binaryPath, err := exec.LookPath("roost-dev")
+	if err != nil {
+		// Fall back to go/bin
+		binaryPath = filepath.Join(homeDir, "go", "bin", "roost-dev")
+	}
+
+	// Ensure logs directory exists
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("creating logs directory: %w", err)
+	}
+
+	// Create LaunchAgent directory if needed
+	launchAgentDir := filepath.Dir(plistPath)
+	if err := os.MkdirAll(launchAgentDir, 0755); err != nil {
+		return fmt.Errorf("creating LaunchAgents directory: %w", err)
+	}
+
+	// Generate plist content
+	plistContent := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.roost-dev</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>%s</string>
+        <string>serve</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>SHELL</key>
+        <string>/bin/zsh</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>%s/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>%s/stderr.log</string>
+</dict>
+</plist>
+`, binaryPath, logsDir, logsDir)
+
+	fmt.Printf("Creating %s...\n", plistPath)
+	if err := os.WriteFile(plistPath, []byte(plistContent), 0644); err != nil {
+		return fmt.Errorf("writing plist: %w", err)
+	}
+
+	// Unload if already loaded (ignore errors)
+	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid())).Run()
+
+	// Load the agent
+	fmt.Println("Loading LaunchAgent...")
+	cmd := exec.Command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), plistPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("loading LaunchAgent: %s (%w)", string(output), err)
+	}
+
+	fmt.Println()
+	fmt.Println("Service installed successfully!")
+	fmt.Println()
+	fmt.Printf("roost-dev is now running in the background.\n")
+	fmt.Printf("Logs: %s/\n", logsDir)
+	fmt.Println()
+	fmt.Println("The service will start automatically on login.")
+
+	return nil
+}
+
+func runServiceUninstall() error {
+	plistPath := getUserLaunchAgentPath()
+
+	// Check if plist exists
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		fmt.Println("Service is not installed.")
+		return nil
+	}
+
+	// Unload the agent
+	fmt.Println("Stopping service...")
+	cmd := exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid()))
+	cmd.Run() // Ignore errors if not loaded
+
+	// Remove plist
+	fmt.Printf("Removing %s...\n", plistPath)
+	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing plist: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Service uninstalled.")
+	fmt.Println("Run 'roost-dev serve' to start manually when needed.")
+
+	return nil
+}
+
+func runServiceStatus() {
+	plistPath := getUserLaunchAgentPath()
+
+	// Check if plist exists
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		fmt.Println("Service: not installed")
+		fmt.Println()
+		fmt.Println("Run 'roost-dev service install' to set up background service.")
+		return
+	}
+
+	fmt.Println("Service: installed")
+	fmt.Printf("Plist: %s\n", plistPath)
+
+	// Check if running via launchctl
+	cmd := exec.Command("launchctl", "print", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid()))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("Status: not running")
+	} else {
+		// Parse PID from output
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "pid = ") {
+				parts := strings.Split(line, "=")
+				if len(parts) > 1 {
+					pid := strings.TrimSpace(parts[1])
+					fmt.Printf("Status: running (PID %s)\n", pid)
+					break
+				}
+			}
+		}
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
+	fmt.Printf("Logs: %s/\n", logsDir)
 }
 
 const (

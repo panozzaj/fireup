@@ -21,11 +21,14 @@ sudo roost-dev install
 # Start the server
 roost-dev serve
 
-# Create a config
-echo "npm run dev" > ~/.config/roost-dev/myapp
+# Verify it's working
+open http://roost-test.localhost
 
-# Visit http://myapp.localhost
+# Open the dashboard
+open http://roost-dev.localhost
 ```
+
+Then create configs in `~/.config/roost-dev/` for your apps (see Configuration below).
 
 ## Configuration
 

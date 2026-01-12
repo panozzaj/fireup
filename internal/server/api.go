@@ -469,3 +469,9 @@ func (s *Server) handleOpenConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
+
+// handleWelcome serves the built-in welcome/test page at roost-test.<tld>
+func (s *Server) handleWelcome(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(pages.Welcome(s.cfg.TLD, s.cfg.Dir, s.getTheme())))
+}

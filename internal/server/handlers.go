@@ -26,6 +26,12 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		s.handleDashboard(w, r)
 		return
 	}
+
+	// Built-in welcome page at roost-test.<tld>
+	if host == "roost-test."+s.cfg.TLD || host == "roost-test" {
+		s.handleWelcome(w, r)
+		return
+	}
 	if strings.HasSuffix(host, ".roost-dev."+s.cfg.TLD) {
 		// Subdomain of roost-dev.test → route to roost-dev-tests services
 		subdomain := strings.TrimSuffix(host, ".roost-dev."+s.cfg.TLD)

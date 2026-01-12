@@ -500,14 +500,15 @@ const dashboardHTML = `<!DOCTYPE html>
                 newHTML = ` + "`" + `
                     <div class="empty-state">
                         <h2>No apps configured</h2>
-                        <p>Add config files to ~/.config/roost-dev/</p>
-                        <code># Simple port proxy
-echo "3000" > ~/.config/roost-dev/myapp
-
-# Command (auto-starts with PORT env)
+                        <p>Create a config file in <code style="display:inline;padding:2px 6px;margin:0">~/.config/roost-dev/</code></p>
+                        <code># Example: create a config for your app
 echo "npm run dev" > ~/.config/roost-dev/myapp
 
-# Then visit http://myapp.{{.TLD}}</code>
+# Your command receives a $PORT env var
+# Then visit http://myapp.` + "`" + ` + TLD + ` + "`" + `
+
+# For more options, see: roost-dev serve --help</code>
+                        <p style="margin-top:20px;font-size:13px">Config directory: <code style="display:inline;padding:2px 6px;margin:0">~/.config/roost-dev/</code></p>
                     </div>
                 ` + "`" + `;
             } else {
