@@ -57,12 +57,17 @@ func main() {
 				os.Exit(1)
 			}
 			os.Exit(0)
+		case "list", "ls":
+			if err := runList(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(0)
 		case "help":
 			printUsage()
 			os.Exit(0)
 		default:
-			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", os.Args[1])
-			printUsage()
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\nRun 'roost-dev help' for usage.\n", os.Args[1])
 			os.Exit(1)
 		}
 	}
@@ -242,6 +247,7 @@ USAGE:
     roost-dev <command> <app-name>
 
 COMMANDS:
+    list, ls        List configured apps and their status
     start <app>     Start an app
     stop <app>      Stop an app
     restart <app>   Restart an app
@@ -528,6 +534,154 @@ func runCommand(cmd, appName string) error {
 	case "restart":
 		fmt.Printf("%s restarted\n", appName)
 	}
+	return nil
+}
+
+// AppStatus represents the status of a single app from the API
+type AppStatus struct {
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	URL         string      `json:"url"`
+	Aliases     []string    `json:"aliases,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Running     bool        `json:"running,omitempty"`
+	Port        int         `json:"port,omitempty"`
+	Uptime      string      `json:"uptime,omitempty"`
+	Services    []SvcStatus `json:"services,omitempty"`
+}
+
+// SvcStatus represents the status of a service within a multi-service app
+type SvcStatus struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	Port    int    `json:"port,omitempty"`
+	Uptime  string `json:"uptime,omitempty"`
+	URL     string `json:"url"`
+	Default bool   `json:"default,omitempty"`
+}
+
+func runList() error {
+	// Load config to get TLD
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "roost-dev")
+	globalCfg, err := loadGlobalConfig(configDir)
+	if err != nil {
+		globalCfg = &GlobalConfig{TLD: "localhost"}
+	}
+
+	// Try to get status from running server
+	url := fmt.Sprintf("http://roost-dev.%s/api/status", globalCfg.TLD)
+	resp, err := http.Get(url)
+	if err != nil {
+		// Server not running - fall back to listing config files
+		return listConfigFiles(configDir, globalCfg.TLD)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return listConfigFiles(configDir, globalCfg.TLD)
+	}
+
+	var apps []AppStatus
+	if err := json.NewDecoder(resp.Body).Decode(&apps); err != nil {
+		return fmt.Errorf("failed to parse status: %v", err)
+	}
+
+	if len(apps) == 0 {
+		fmt.Println("No apps configured.")
+		fmt.Printf("Add configs to %s\n", configDir)
+		return nil
+	}
+
+	// Print header
+	fmt.Printf("%-25s %-10s %s\n", "APP", "STATUS", "URL")
+	fmt.Printf("%-25s %-10s %s\n", strings.Repeat("-", 25), strings.Repeat("-", 10), strings.Repeat("-", 30))
+
+	for _, app := range apps {
+		var status string
+		if app.Type == "multi-service" {
+			// For multi-service apps, show how many services are running
+			runningCount := 0
+			for _, svc := range app.Services {
+				if svc.Running {
+					runningCount++
+				}
+			}
+			if runningCount == 0 {
+				status = "stopped"
+			} else if runningCount == len(app.Services) {
+				status = "running"
+			} else {
+				status = fmt.Sprintf("%d/%d", runningCount, len(app.Services))
+			}
+		} else {
+			if app.Running {
+				status = "running"
+			} else {
+				status = "stopped"
+			}
+		}
+
+		// Add color codes for terminal
+		statusStr := status
+		switch {
+		case status == "running":
+			statusStr = "\033[32m" + status + "\033[0m" // green
+		case status == "stopped":
+			statusStr = "\033[90m" + status + "\033[0m" // gray
+		case strings.Contains(status, "/"):
+			statusStr = "\033[33m" + status + "\033[0m" // yellow for partial
+		}
+
+		name := app.Name
+		if len(app.Aliases) > 0 {
+			name = fmt.Sprintf("%s (%s)", app.Name, strings.Join(app.Aliases, ", "))
+		}
+		fmt.Printf("%-25s %-10s %s\n", name, statusStr, app.URL)
+	}
+
+	return nil
+}
+
+func listConfigFiles(configDir, tld string) error {
+	entries, err := os.ReadDir(configDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No apps configured.")
+			fmt.Printf("Add configs to %s\n", configDir)
+			return nil
+		}
+		return err
+	}
+
+	var apps []string
+	for _, entry := range entries {
+		name := entry.Name()
+		// Skip hidden files and config.json
+		if strings.HasPrefix(name, ".") || name == "config.json" {
+			continue
+		}
+		// Remove .yml/.yaml extension for display
+		name = strings.TrimSuffix(name, ".yml")
+		name = strings.TrimSuffix(name, ".yaml")
+		apps = append(apps, name)
+	}
+
+	if len(apps) == 0 {
+		fmt.Println("No apps configured.")
+		fmt.Printf("Add configs to %s\n", configDir)
+		return nil
+	}
+
+	fmt.Println("Configured apps (server not running):")
+	fmt.Printf("%-20s %s\n", "APP", "URL")
+	fmt.Printf("%-20s %s\n", "---", "---")
+	for _, app := range apps {
+		url := fmt.Sprintf("http://%s.%s", app, tld)
+		fmt.Printf("%-20s %s\n", app, url)
+	}
+	fmt.Println("\nStart the server with: roost-dev")
+
 	return nil
 }
 
