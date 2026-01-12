@@ -1,0 +1,392 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/panozzaj/roost-dev/internal/config"
+	"github.com/panozzaj/roost-dev/internal/ui"
+)
+
+// handleDashboard serves the web UI and API endpoints
+func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	// Add CORS headers for API endpoints (needed for interstitial page cross-origin fetches)
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
+
+	switch r.URL.Path {
+	case "/":
+		ui.ServeIndex(w, r, s.cfg.TLD, s.cfg.URLPort, s.getStatus(), s.getTheme())
+
+	case "/api/status":
+		s.handleAPIStatus(w, r)
+
+	case "/api/events":
+		s.handleSSE(w, r)
+
+	case "/api/reload":
+		s.apps.Reload()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+
+	case "/api/stop":
+		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		if name != "" {
+			// Try direct process name first
+			if _, found := s.procs.Get(name); found {
+				s.procs.Stop(name)
+			} else if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
+				// Stop all services for multi-service app
+				for _, svc := range app.Services {
+					procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+					s.procs.Stop(procName)
+				}
+			}
+			s.broadcastStatus()
+		}
+		w.WriteHeader(http.StatusOK)
+
+	case "/api/restart":
+		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		s.logRequest("API restart called for: %s", name)
+		if name != "" {
+			// Try direct process name first
+			if proc, found := s.procs.Get(name); found {
+				s.logRequest("  Restarting process: %s", proc.Name)
+				s.procs.RestartAsync(proc.Name)
+			} else if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
+				// Restart all services for multi-service app
+				for i := range app.Services {
+					svc := &app.Services[i]
+					procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+					if proc, found := s.procs.Get(procName); found {
+						s.procs.RestartAsync(proc.Name)
+					} else {
+						s.ensureDependencies(app, svc)
+						s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
+					}
+				}
+			} else {
+				// Try to start it fresh
+				s.startByName(name)
+			}
+			s.broadcastStatus()
+		}
+		w.WriteHeader(http.StatusOK)
+
+	case "/api/start":
+		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		if name != "" {
+			s.startByName(name)
+			s.broadcastStatus()
+		}
+		w.WriteHeader(http.StatusOK)
+
+	case "/api/logs":
+		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		var allLogs []string
+
+		// Try direct process name first
+		if proc, found := s.procs.Get(name); found {
+			allLogs = proc.Logs().Lines()
+		} else {
+			// For multi-service apps, aggregate logs from all services
+			if app, found := s.apps.Get(name); found && app.Type == config.AppTypeYAML {
+				for _, svc := range app.Services {
+					procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+					if proc, found := s.procs.Get(procName); found {
+						for _, line := range proc.Logs().Lines() {
+							allLogs = append(allLogs, fmt.Sprintf("[%s] %s", svc.Name, line))
+						}
+					}
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(allLogs)
+
+	case "/api/server-logs":
+		// Return roost-dev's request handling logs
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(s.requestLog.Lines())
+
+	case "/api/app-status":
+		name := r.URL.Query().Get("name")
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+		type singleAppStatus struct {
+			Status string `json:"status"` // idle, starting, running, failed
+			Error  string `json:"error,omitempty"`
+		}
+
+		status := singleAppStatus{Status: "idle"}
+		if proc, found := s.procs.Get(name); found {
+			if proc.IsStarting() {
+				status.Status = "starting"
+			} else if proc.IsRunning() {
+				status.Status = "running"
+			} else if proc.HasFailed() {
+				status.Status = "failed"
+				status.Error = proc.ExitError()
+			}
+		}
+
+		// If this is a service, also check that dependencies are running
+		// Format: "service-appname" -> check dependencies of service
+		if status.Status == "running" {
+			if idx := strings.Index(name, "-"); idx != -1 {
+				serviceName := name[:idx]
+				appName := name[idx+1:]
+				if app, svc, found := s.apps.GetService(appName, serviceName); found {
+					for _, depName := range svc.DependsOn {
+						depProcName := fmt.Sprintf("%s-%s", depName, app.Name)
+						depProc, found := s.procs.Get(depProcName)
+						if !found {
+							// Dependency not started yet - report starting
+							status.Status = "starting"
+							break
+						}
+						if depProc.IsStarting() {
+							status.Status = "starting" // Dependency still starting
+							break
+						} else if depProc.HasFailed() {
+							status.Status = "failed"
+							status.Error = fmt.Sprintf("dependency %s failed: %s", depName, depProc.ExitError())
+							break
+						} else if !depProc.IsRunning() {
+							status.Status = "starting" // Dependency not ready
+							break
+						}
+					}
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+
+	case "/api/analyze-logs":
+		// Use Ollama to identify error lines in logs
+		if s.ollamaClient == nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": false})
+			return
+		}
+
+		name := r.URL.Query().Get("name")
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+
+		var logs []string
+		if proc, found := s.procs.Get(name); found {
+			logs = proc.Logs().Lines()
+		}
+
+		if len(logs) == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "errorLines": []int{}})
+			return
+		}
+
+		// Run analysis async-ish but return result
+		errorLines, err := s.ollamaClient.AnalyzeLogs(context.Background(), logs)
+		if err != nil {
+			s.logRequest("Ollama analysis error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "error": err.Error()})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"enabled": true, "errorLines": errorLines})
+
+	case "/api/theme":
+		if r.Method == "POST" {
+			var req struct {
+				Theme string `json:"theme"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "invalid request", http.StatusBadRequest)
+				return
+			}
+			if err := s.setTheme(req.Theme); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"theme": req.Theme})
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"theme": s.getTheme()})
+		}
+
+	case "/api/claude-enabled":
+		// Check if claude command is configured
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"enabled": s.cfg.ClaudeCommand != ""})
+
+	case "/api/open-terminal":
+		s.handleOpenTerminal(w, r)
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// handleOpenTerminal opens iTerm2 with Claude Code for fixing app errors
+func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "name parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve alias to app name
+	if app, found := s.apps.GetByNameOrAlias(name); found {
+		name = app.Name
+	}
+
+	// Find directory and logs for this app/service
+	var dir string
+	var logs []string
+
+	// Try direct process name first (for services like "web-myapp")
+	if proc, found := s.procs.Get(name); found {
+		dir = proc.Dir
+		logs = proc.Logs().Lines()
+	}
+
+	// If no process found, try as an app
+	if dir == "" {
+		if app, found := s.apps.Get(name); found {
+			dir = app.Dir
+			// For multi-service apps, try to get logs from first failed service
+			if app.Type == config.AppTypeYAML {
+				for _, svc := range app.Services {
+					procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+					if proc, found := s.procs.Get(procName); found {
+						if proc.HasFailed() {
+							dir = svc.Dir
+							if dir == "" {
+								dir = proc.Dir
+							}
+							logs = proc.Logs().Lines()
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// If still no dir, try to parse as service-appname
+	if dir == "" {
+		if idx := strings.Index(name, "-"); idx != -1 {
+			serviceName := name[:idx]
+			appName := name[idx+1:]
+			if _, svc, found := s.apps.GetService(appName, serviceName); found {
+				dir = svc.Dir
+			}
+		}
+	}
+
+	if dir == "" {
+		http.Error(w, "could not find directory for app", http.StatusNotFound)
+		return
+	}
+
+	// Check if claude command is configured
+	if s.cfg.ClaudeCommand == "" {
+		http.Error(w, "claude command not configured in ~/.config/roost-dev/config.json", http.StatusBadRequest)
+		return
+	}
+
+	// Build the prompt for Claude Code with roost-dev context
+	logsText := strings.Join(logs, "\n")
+	prompt := fmt.Sprintf(`The roost-dev app %q failed to start.
+
+## About roost-dev
+roost-dev is a local development server that manages apps via config files in ~/.config/roost-dev/.
+- Config file for this app: ~/.config/roost-dev/%s.yml
+- To restart the app after fixing: curl -X POST "http://roost-dev.%s/api/restart?name=%s"
+- To check app status: curl "http://roost-dev.%s/api/app-status?name=%s"
+- To view logs: curl "http://roost-dev.%s/api/logs?name=%s" | jq
+
+## Logs
+`+"```"+`
+%s
+`+"```"+`
+
+Please help me fix this error. After fixing, restart the app using the curl command above and verify it starts successfully.`,
+		name, name, s.cfg.TLD, name, s.cfg.TLD, name, s.cfg.TLD, name, logsText)
+
+	// Write prompt to a temp file to avoid shell escaping issues
+	tmpFile, err := os.CreateTemp("", "roost-dev-prompt-*.txt")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to create temp file: %v", err), http.StatusInternalServerError)
+		return
+	}
+	promptFile := tmpFile.Name()
+	if _, err := tmpFile.WriteString(prompt); err != nil {
+		tmpFile.Close()
+		os.Remove(promptFile)
+		http.Error(w, fmt.Sprintf("failed to write prompt: %v", err), http.StatusInternalServerError)
+		return
+	}
+	tmpFile.Close()
+
+	// Use osascript to open iTerm2 with cd and claude command (interactive session)
+	// Escape single quotes in the path for shell safety
+	escDir := strings.ReplaceAll(dir, "'", "'\\''")
+	escPromptFile := strings.ReplaceAll(promptFile, "'", "'\\''")
+	script := fmt.Sprintf(`tell application "iTerm"
+	activate
+	set newWindow to (create window with default profile)
+	tell current session of newWindow
+		write text "cd '%s' && %s \"$(cat '%s')\" ; rm -f '%s'"
+	end tell
+end tell`, escDir, s.cfg.ClaudeCommand, escPromptFile, escPromptFile)
+
+	cmd := exec.Command("osascript", "-e", script)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		os.Remove(promptFile)
+		s.logRequest("Failed to open terminal: %v, output: %s", err, string(output))
+		http.Error(w, fmt.Sprintf("failed to open terminal: %v (%s)", err, string(output)), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
