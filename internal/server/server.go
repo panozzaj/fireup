@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -401,6 +402,38 @@ function showError(msg) {
     btn.style.display = 'inline-block';
     btn.disabled = false;
     btn.textContent = 'Restart';
+    // Show the Fix with Claude Code button
+    document.getElementById('fix-btn').style.display = 'inline-block';
+}
+
+async function fixWithClaudeCode() {
+    const btn = document.getElementById('fix-btn');
+    btn.textContent = 'Opening...';
+    btn.disabled = true;
+    try {
+        const res = await fetch('http://roost-dev.' + tld + '/api/open-terminal?name=' + encodeURIComponent(appName));
+        if (!res.ok) {
+            console.error('Failed to open terminal');
+            btn.textContent = 'Error';
+            setTimeout(() => {
+                btn.textContent = 'Fix with Claude Code';
+                btn.disabled = false;
+            }, 2000);
+            return;
+        }
+        btn.textContent = 'Opened!';
+        setTimeout(() => {
+            btn.textContent = 'Fix with Claude Code';
+            btn.disabled = false;
+        }, 1000);
+    } catch (e) {
+        console.error('Failed to open terminal:', e);
+        btn.textContent = 'Error';
+        setTimeout(() => {
+            btn.textContent = 'Fix with Claude Code';
+            btn.disabled = false;
+        }, 2000);
+    }
 }
 
 function copyLogs() {
@@ -527,6 +560,7 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
                 <div class="logs-buttons">
                     <button class="btn copy-btn" id="copy-btn" onclick="copyLogs()">Copy</button>
                     <button class="btn copy-btn" id="copy-agent-btn" onclick="copyForAgent()">Copy for agent</button>
+                    <button class="btn copy-btn" id="fix-btn" onclick="fixWithClaudeCode()" style="display: none;">Fix with Claude Code</button>
                 </div>
             </div>
             <div class="logs-content" id="logs-content"><span class="logs-empty">Waiting for output...</span></div>
@@ -574,25 +608,31 @@ type Server struct {
 	ollamaClient  *ollama.Client     // Optional LLM client for log analysis
 }
 
-// getTheme reads the theme from the theme file, defaults to "system"
+// getTheme reads the theme from config-theme.json, defaults to "system"
 func (s *Server) getTheme() string {
-	data, err := os.ReadFile(filepath.Join(s.cfg.Dir, "theme"))
+	data, err := os.ReadFile(filepath.Join(s.cfg.Dir, "config-theme.json"))
 	if err != nil {
 		return "system"
 	}
-	theme := strings.TrimSpace(string(data))
-	if theme == "light" || theme == "dark" || theme == "system" {
-		return theme
+	var cfg struct {
+		Theme string `json:"theme"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "system"
+	}
+	if cfg.Theme == "light" || cfg.Theme == "dark" || cfg.Theme == "system" {
+		return cfg.Theme
 	}
 	return "system"
 }
 
-// setTheme writes the theme to the theme file
+// setTheme writes the theme to config-theme.json
 func (s *Server) setTheme(theme string) error {
 	if theme != "light" && theme != "dark" && theme != "system" {
 		return fmt.Errorf("invalid theme: %s", theme)
 	}
-	return os.WriteFile(filepath.Join(s.cfg.Dir, "theme"), []byte(theme), 0644)
+	data, _ := json.Marshal(map[string]string{"theme": theme})
+	return os.WriteFile(filepath.Join(s.cfg.Dir, "config-theme.json"), data, 0644)
 }
 
 // New creates a new server
@@ -1216,6 +1256,135 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"theme": s.getTheme()})
 		}
+
+	case "/api/claude-enabled":
+		// Check if claude command is configured
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"enabled": s.cfg.ClaudeCommand != ""})
+
+	case "/api/open-terminal":
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			http.Error(w, "name parameter required", http.StatusBadRequest)
+			return
+		}
+
+		// Resolve alias to app name
+		if app, found := s.apps.GetByNameOrAlias(name); found {
+			name = app.Name
+		}
+
+		// Find directory and logs for this app/service
+		var dir string
+		var logs []string
+
+		// Try direct process name first (for services like "web-myapp")
+		if proc, found := s.procs.Get(name); found {
+			dir = proc.Dir
+			logs = proc.Logs().Lines()
+		}
+
+		// If no process found, try as an app
+		if dir == "" {
+			if app, found := s.apps.Get(name); found {
+				dir = app.Dir
+				// For multi-service apps, try to get logs from first failed service
+				if app.Type == config.AppTypeYAML {
+					for _, svc := range app.Services {
+						procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
+						if proc, found := s.procs.Get(procName); found {
+							if proc.HasFailed() {
+								dir = svc.Dir
+								if dir == "" {
+									dir = proc.Dir
+								}
+								logs = proc.Logs().Lines()
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// If still no dir, try to parse as service-appname
+		if dir == "" {
+			if idx := strings.Index(name, "-"); idx != -1 {
+				serviceName := name[:idx]
+				appName := name[idx+1:]
+				if _, svc, found := s.apps.GetService(appName, serviceName); found {
+					dir = svc.Dir
+				}
+			}
+		}
+
+		if dir == "" {
+			http.Error(w, "could not find directory for app", http.StatusNotFound)
+			return
+		}
+
+		// Check if claude command is configured
+		if s.cfg.ClaudeCommand == "" {
+			http.Error(w, "claude command not configured in ~/.config/roost-dev/config.json", http.StatusBadRequest)
+			return
+		}
+
+		// Build the prompt for Claude Code with roost-dev context
+		logsText := strings.Join(logs, "\n")
+		prompt := fmt.Sprintf(`The roost-dev app %q failed to start.
+
+## About roost-dev
+roost-dev is a local development server that manages apps via config files in ~/.config/roost-dev/.
+- Config file for this app: ~/.config/roost-dev/%s.yml
+- To restart the app after fixing: curl -X POST "http://roost-dev.%s/api/restart?name=%s"
+- To check app status: curl "http://roost-dev.%s/api/app-status?name=%s"
+- To view logs: curl "http://roost-dev.%s/api/logs?name=%s" | jq
+
+## Logs
+`+"```"+`
+%s
+`+"```"+`
+
+Please help me fix this error. After fixing, restart the app using the curl command above and verify it starts successfully.`,
+			name, name, s.cfg.TLD, name, s.cfg.TLD, name, s.cfg.TLD, name, logsText)
+
+		// Write prompt to a temp file to avoid shell escaping issues
+		tmpFile, err := os.CreateTemp("", "roost-dev-prompt-*.txt")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to create temp file: %v", err), http.StatusInternalServerError)
+			return
+		}
+		promptFile := tmpFile.Name()
+		if _, err := tmpFile.WriteString(prompt); err != nil {
+			tmpFile.Close()
+			os.Remove(promptFile)
+			http.Error(w, fmt.Sprintf("failed to write prompt: %v", err), http.StatusInternalServerError)
+			return
+		}
+		tmpFile.Close()
+
+		// Use osascript to open iTerm2 with cd and claude command (interactive session)
+		// Escape single quotes in the path for shell safety
+		escDir := strings.ReplaceAll(dir, "'", "'\\''")
+		escPromptFile := strings.ReplaceAll(promptFile, "'", "'\\''")
+		script := fmt.Sprintf(`tell application "iTerm"
+	activate
+	set newWindow to (create window with default profile)
+	tell current session of newWindow
+		write text "cd '%s' && %s \"$(cat '%s')\" ; rm -f '%s'"
+	end tell
+end tell`, escDir, s.cfg.ClaudeCommand, escPromptFile, escPromptFile)
+
+		cmd := exec.Command("osascript", "-e", script)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			os.Remove(promptFile)
+			s.logRequest("Failed to open terminal: %v, output: %s", err, string(output))
+			http.Error(w, fmt.Sprintf("failed to open terminal: %v (%s)", err, string(output)), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 
 	default:
 		http.NotFound(w, r)

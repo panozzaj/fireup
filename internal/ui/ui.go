@@ -387,6 +387,12 @@ const dashboardHTML = `<!DOCTYPE html>
         let currentApps = [];
         let expandedLogs = null;
         let eventSource = null;
+        let claudeEnabled = false;
+
+        // Check if Claude Code integration is configured
+        fetch('/api/claude-enabled').then(r => r.json()).then(data => {
+            claudeEnabled = data.enabled;
+        }).catch(() => { claudeEnabled = false; });
 
         // Convert name to URL-safe slug (spaces to dashes, lowercase)
         function slugify(name) {
@@ -603,7 +609,8 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                             <span class="logs-title">Logs</span>
                             <div class="logs-actions">
                                 <button onclick="event.stopPropagation(); copyLogs('${app.name}', event)">Copy</button>
-                                <button onclick="event.stopPropagation(); copyForAgent('${app.name}', event)">Copy for agent</button>
+                                ${hasFailed ? ` + "`" + `<button onclick="event.stopPropagation(); copyForAgent('${app.name}', event)">Copy for agent</button>` + "`" + ` : ''}
+                                ${hasFailed && claudeEnabled ? ` + "`" + `<button onclick="event.stopPropagation(); fixWithClaudeCode('${app.name}', event)">Fix with Claude Code</button>` + "`" + ` : ''}
                                 <button onclick="event.stopPropagation(); clearLogs('${app.name}')">Clear</button>
                             </div>
                         </div>
@@ -786,6 +793,36 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
 
             event.target.textContent = 'Copied!';
             setTimeout(() => event.target.textContent = 'Copy for agent', 500);
+        }
+
+        async function fixWithClaudeCode(name, event) {
+            event.target.textContent = 'Opening...';
+            event.target.disabled = true;
+            try {
+                const res = await fetch('/api/open-terminal?name=' + encodeURIComponent(name));
+                if (!res.ok) {
+                    const err = await res.text();
+                    console.error('Failed to open terminal:', err);
+                    event.target.textContent = 'Error';
+                    setTimeout(() => {
+                        event.target.textContent = 'Fix with Claude Code';
+                        event.target.disabled = false;
+                    }, 2000);
+                    return;
+                }
+                event.target.textContent = 'Opened!';
+                setTimeout(() => {
+                    event.target.textContent = 'Fix with Claude Code';
+                    event.target.disabled = false;
+                }, 1000);
+            } catch (e) {
+                console.error('Failed to open terminal:', e);
+                event.target.textContent = 'Error';
+                setTimeout(() => {
+                    event.target.textContent = 'Fix with Claude Code';
+                    event.target.disabled = false;
+                }, 2000);
+            }
         }
 
         async function stop(name) {

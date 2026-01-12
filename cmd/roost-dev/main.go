@@ -21,8 +21,9 @@ import (
 
 // GlobalConfig stores persistent settings
 type GlobalConfig struct {
-	TLD    string        `json:"tld"`
-	Ollama *OllamaConfig `json:"ollama,omitempty"`
+	TLD           string        `json:"tld"`
+	Ollama        *OllamaConfig `json:"ollama,omitempty"`
+	ClaudeCommand string        `json:"claude_command,omitempty"` // Command to run Claude Code (default: "claude")
 }
 
 // OllamaConfig stores settings for local LLM error analysis
@@ -156,13 +157,20 @@ func main() {
 		}
 	}
 
+	// Get Claude command with default
+	claudeCmd := globalCfg.ClaudeCommand
+	if claudeCmd == "" {
+		claudeCmd = "claude"
+	}
+
 	cfg := &config.Config{
-		Dir:       configDir,
-		HTTPPort:  httpPort,
-		HTTPSPort: httpsPort,
-		URLPort:   urlPort,
-		TLD:       tld,
-		Ollama:    ollamaCfg,
+		Dir:           configDir,
+		HTTPPort:      httpPort,
+		HTTPSPort:     httpsPort,
+		URLPort:       urlPort,
+		TLD:           tld,
+		Ollama:        ollamaCfg,
+		ClaudeCommand: claudeCmd,
 	}
 
 	// Create and start server

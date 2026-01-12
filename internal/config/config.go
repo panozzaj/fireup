@@ -14,12 +14,13 @@ import (
 
 // Config holds the global configuration
 type Config struct {
-	Dir       string
-	HTTPPort  int // Port to listen on
-	HTTPSPort int
-	URLPort   int // Port to use in generated URLs (for pf forwarding)
-	TLD       string
-	Ollama    *OllamaConfig
+	Dir           string
+	HTTPPort      int // Port to listen on
+	HTTPSPort     int
+	URLPort       int // Port to use in generated URLs (for pf forwarding)
+	TLD           string
+	Ollama        *OllamaConfig
+	ClaudeCommand string // Command to run Claude Code (default: "claude")
 }
 
 // OllamaConfig stores settings for local LLM error analysis
@@ -97,8 +98,8 @@ func (s *AppStore) Load() error {
 		name := entry.Name()
 		path := filepath.Join(s.cfg.Dir, name)
 
-		// Skip hidden files and the global config file
-		if strings.HasPrefix(name, ".") || name == "config.json" {
+		// Skip hidden files and config files (config.json, config-*.json)
+		if strings.HasPrefix(name, ".") || name == "config.json" || strings.HasPrefix(name, "config-") {
 			continue
 		}
 
