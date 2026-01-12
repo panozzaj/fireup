@@ -9,8 +9,8 @@ A local development proxy for all your projects. Like [puma-dev](https://github.
 - Works with any web server (Node, Ruby, Python, Elixir, Go, Rust, etc.)
 - Dynamic port allocation - no more port conflicts
 - On-demand startup - services start when you access them
-- Subdomain support - `admin.myapp.localhost` passes through to your app
-- Web dashboard at `roost-dev.localhost`
+- Subdomain support - `admin.myapp.test` passes through to your app
+- Web dashboard at `roost-dev.test`
 
 ## Quick Start
 
@@ -23,12 +23,10 @@ roost-dev serve
 ```
 
 Then visit:
-- **http://roost-test.localhost** - Verify it's working
-- **http://roost-dev.localhost** - Open the dashboard
+- **http://roost-test.test** - Verify it's working
+- **http://roost-dev.test** - Open the dashboard
 
 Create configs in `~/.config/roost-dev/` for your apps (see Configuration below).
-
-> Using a custom TLD? Replace `.localhost` with your TLD (e.g., `.test`).
 
 ## Configuration
 
@@ -54,7 +52,7 @@ ln -s ~/projects/my-site ~/.config/roost-dev/mysite
 
 ```bash
 echo "3000" > ~/.config/roost-dev/myapp
-# Proxies http://myapp.localhost to localhost:3000
+# Proxies http://myapp.test to localhost:3000
 ```
 
 > **Note**: Fixed ports can conflict with other apps. Prefer using a command with `$PORT` when possible.
@@ -81,10 +79,10 @@ services:
     cmd: npm start
     depends_on: [backend]
     env:
-      API_URL: http://backend-myproject.localhost
+      API_URL: http://backend-myproject.test
 ```
 
-Access at `http://frontend-myproject.localhost` and `http://backend-myproject.localhost`.
+Access at `http://frontend-myproject.test` and `http://backend-myproject.test`.
 
 Services with `depends_on` will automatically start their dependencies first.
 
@@ -106,23 +104,19 @@ Note: Port numbers must be under 65535, so keep offsets small when roost-dev ass
 Subdomains are passed through to your app:
 
 ```
-admin.myapp.localhost -> myapp (Host header: admin.myapp.localhost)
+admin.myapp.test -> myapp (Host header: admin.myapp.test)
 ```
 
 Your app reads the `Host` header to determine the subdomain.
 
-## Using .test TLD
+## Using a Different TLD
 
-roost-dev includes a DNS server for custom TLDs:
+The default TLD is `.test`. To use a different one (e.g., `.dev`):
 
 ```bash
-# Install with .test TLD
-sudo roost-dev install --tld test
-
-# Run
-roost-dev serve --tld test
-
-# Visit http://myapp.test
+sudo roost-dev install --tld dev
+roost-dev serve --tld dev
+# Visit http://myapp.dev
 ```
 
 ## CLI Commands

@@ -119,7 +119,7 @@ Run 'roost-dev <command> --help' for command-specific options.
 QUICK START:
     sudo roost-dev install        # One-time setup
     roost-dev serve               # Start the server
-    # Then visit http://roost-dev.localhost (or .test if using custom TLD)`)
+    # Then visit http://roost-dev.test`)
 }
 
 // cmdServe handles the 'serve' command
@@ -198,7 +198,7 @@ CONFIGURATION:
 	globalCfg, err := loadGlobalConfig(configDir)
 	if err != nil {
 		log.Printf("Warning: could not load config: %v", err)
-		globalCfg = &GlobalConfig{TLD: "localhost"}
+		globalCfg = &GlobalConfig{TLD: "test"}
 	}
 	if tld == "" {
 		tld = globalCfg.TLD
@@ -361,7 +361,7 @@ func cmdInstall(args []string) {
 		configDir string
 	)
 
-	fs.StringVar(&tld, "tld", "localhost", "Top-level domain to configure")
+	fs.StringVar(&tld, "tld", "test", "Top-level domain to configure")
 	fs.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
 
 	fs.Usage = func() {
@@ -374,14 +374,13 @@ OPTIONS:`)
 		fs.PrintDefaults()
 		fmt.Println(`
 DESCRIPTION:
-    Sets up macOS pf (packet filter) rules to forward port 80 to roost-dev.
-    This allows accessing apps at http://myapp.localhost without specifying a port.
-
-    For custom TLDs like .test, also creates a DNS resolver file.
+    Sets up macOS pf (packet filter) rules to forward port 80 to roost-dev,
+    and creates a DNS resolver for the TLD. This allows accessing apps at
+    http://myapp.test without specifying a port.
 
 EXAMPLES:
-    sudo roost-dev install              # Setup for .localhost
-    sudo roost-dev install --tld test   # Setup for .test TLD`)
+    sudo roost-dev install              # Setup for .test (default)
+    sudo roost-dev install --tld dev    # Setup for .dev TLD`)
 	}
 
 	// Check for help before parsing
@@ -404,7 +403,7 @@ func cmdUninstall(args []string) {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 
 	var tld string
-	fs.StringVar(&tld, "tld", "localhost", "Top-level domain to remove")
+	fs.StringVar(&tld, "tld", "test", "Top-level domain to remove")
 
 	fs.Usage = func() {
 		fmt.Println(`roost-dev uninstall - Remove roost-dev port forwarding config
@@ -421,8 +420,8 @@ DESCRIPTION:
     the roost-dev lines or restore from the backup.
 
 EXAMPLES:
-    sudo roost-dev uninstall              # Remove .localhost config
-    sudo roost-dev uninstall --tld test   # Remove .test TLD config`)
+    sudo roost-dev uninstall              # Remove .test config (default)
+    sudo roost-dev uninstall --tld dev    # Remove .dev TLD config`)
 	}
 
 	// Check for help before parsing
@@ -704,7 +703,7 @@ func loadGlobalConfig(configDir string) (*GlobalConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &GlobalConfig{TLD: "localhost"}, nil
+			return &GlobalConfig{TLD: "test"}, nil
 		}
 		return nil, err
 	}
@@ -924,7 +923,7 @@ func runCommand(cmd, appName string) error {
 	configDir := filepath.Join(homeDir, ".config", "roost-dev")
 	globalCfg, err := loadGlobalConfig(configDir)
 	if err != nil {
-		globalCfg = &GlobalConfig{TLD: "localhost"}
+		globalCfg = &GlobalConfig{TLD: "test"}
 	}
 
 	// Show action in progress
@@ -990,7 +989,7 @@ func runList() error {
 	configDir := filepath.Join(homeDir, ".config", "roost-dev")
 	globalCfg, err := loadGlobalConfig(configDir)
 	if err != nil {
-		globalCfg = &GlobalConfig{TLD: "localhost"}
+		globalCfg = &GlobalConfig{TLD: "test"}
 	}
 
 	// Try to get status from running server
