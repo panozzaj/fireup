@@ -281,30 +281,28 @@ COMMANDS:
 
 OPTIONS:
     --dir <path>          Configuration directory (default: ~/.config/roost-dev)
-    --http-port <n>       HTTP port to listen on (default: 9080)
+    --http-port <n>       HTTP port to listen on (default: 9280)
     --https-port <n>      HTTPS port to listen on (default: 9443)
     --advertise-port <n>  Port to use in URLs (default: 80)
     --dns-port <n>        DNS server port (default: 9053)
     --tld <domain>        Top-level domain to use (default: localhost)
-    --setup               Setup pf/DNS for the specified TLD (requires sudo)
-    --cleanup             Remove pf/DNS configuration (requires sudo)
     --help                Show this help
     --version             Show version
 
 CONFIGURATION:
     Place config files in ~/.config/roost-dev/
 
-    Simple port file:
-        echo "3000" > ~/.config/roost-dev/myapp
-        # Access at http://myapp.localhost
-
-    Command file:
+    Command (recommended):
         echo "npm run dev" > ~/.config/roost-dev/myapp
-        # roost-dev starts the command with PORT env var
+        # roost-dev assigns a dynamic PORT, avoiding conflicts
 
-    Static file path:
-        echo "/path/to/index.html" > ~/.config/roost-dev/mysite
-        # Serves static files
+    Static site (symlink to directory):
+        ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+        # Directory must contain index.html
+
+    Fixed port proxy (not recommended):
+        echo "3000" > ~/.config/roost-dev/myapp
+        # Fixed ports can conflict; prefer commands with $PORT
 
     YAML config (for multi-service projects):
         # ~/.config/roost-dev/myproject.yml
@@ -312,8 +310,7 @@ CONFIGURATION:
         root: ~/projects/myproject
         services:
           backend:
-            dir: backend
-            cmd: mix phx.server
+            cmd: mix phx.server -p $PORT
           frontend:
             cmd: npm start
             env:
@@ -321,6 +318,9 @@ CONFIGURATION:
 
         # Access at http://frontend-myproject.localhost
         # Access at http://backend-myproject.localhost
+
+    Commands receive the port via the $PORT environment variable.
+    Your command should listen on this port (e.g., "rails server -p $PORT").
 
 SETUP (recommended):
     # One-time install for .localhost (pf rules only)

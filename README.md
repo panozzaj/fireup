@@ -31,26 +31,30 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
 
 Place config files in `~/.config/roost-dev/`. The filename becomes the app name.
 
-### Port proxy
+### Command (recommended)
+
+```bash
+echo "npm run dev" > ~/.config/roost-dev/myapp
+# roost-dev assigns a PORT, starts the command, and proxies to it
+```
+
+Your command receives the port via `$PORT` environment variable. This is the preferred method because roost-dev dynamically assigns ports, avoiding conflicts between apps.
+
+### Static files
+
+```bash
+ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+# Serves files from the directory (must contain index.html)
+```
+
+### Fixed port proxy
 
 ```bash
 echo "3000" > ~/.config/roost-dev/myapp
 # Proxies http://myapp.localhost to localhost:3000
 ```
 
-### Command
-
-```bash
-echo "npm run dev" > ~/.config/roost-dev/myapp
-# Starts command with PORT env var, proxies to it
-```
-
-### Static files
-
-```bash
-ln -s ~/projects/my-site ~/.config/roost-dev/mysite
-# Serves files from the directory
-```
+> **Note**: Fixed ports can conflict with other apps. Prefer using a command with `$PORT` when possible.
 
 ### YAML config
 
@@ -109,25 +113,35 @@ Your app reads the `Host` header to determine the subdomain.
 roost-dev includes a DNS server for custom TLDs:
 
 ```bash
-# Setup with .test TLD
-sudo ./roost-dev --setup --tld test
+# Install with .test TLD
+sudo roost-dev install --tld test
 
 # Run
-./roost-dev --tld test
+roost-dev serve --tld test
 
 # Visit http://myapp.test
+```
+
+## CLI Commands
+
+```
+roost-dev serve           Start the server
+roost-dev list            List configured apps and their status
+roost-dev start <app>     Start an app
+roost-dev stop <app>      Stop an app
+roost-dev restart <app>   Restart an app
+roost-dev install         Setup port forwarding (requires sudo)
+roost-dev uninstall       Remove port forwarding (requires sudo)
 ```
 
 ## CLI Options
 
 ```
 --dir <path>          Config directory (default: ~/.config/roost-dev)
---http-port <n>       HTTP port (default: 9080)
+--http-port <n>       HTTP port (default: 9280)
 --advertise-port <n>  Port for URLs (default: 80)
 --dns-port <n>        DNS server port (default: 9053)
 --tld <domain>        Top-level domain (default: localhost)
---setup               Setup pf rules and DNS (requires sudo)
---cleanup             Remove pf rules and DNS (requires sudo)
 ```
 
 ## Running as a Background Service (macOS)

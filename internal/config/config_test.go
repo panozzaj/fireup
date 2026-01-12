@@ -620,3 +620,78 @@ services:
 		}
 	})
 }
+
+func TestLoadStaticApp(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &Config{Dir: tmpDir}
+	store := NewAppStore(cfg)
+
+	t.Run("loads directory with index.html", func(t *testing.T) {
+		// Create a static site directory
+		staticDir := filepath.Join(tmpDir, "mysite")
+		os.MkdirAll(staticDir, 0755)
+		os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<html>Hello</html>"), 0644)
+
+		app, err := store.loadStaticApp("mysite", staticDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if app.Type != AppTypeStatic {
+			t.Errorf("expected AppTypeStatic, got %v", app.Type)
+		}
+		if app.FilePath != staticDir {
+			t.Errorf("expected FilePath %s, got %s", staticDir, app.FilePath)
+		}
+	})
+
+	t.Run("rejects directory without index.html", func(t *testing.T) {
+		emptyDir := filepath.Join(tmpDir, "empty-site")
+		os.MkdirAll(emptyDir, 0755)
+
+		_, err := store.loadStaticApp("empty-site", emptyDir)
+		if err == nil {
+			t.Error("expected error for directory without index.html")
+		}
+	})
+
+	t.Run("loads symlink to directory", func(t *testing.T) {
+		// Create target directory
+		targetDir := filepath.Join(tmpDir, "target-site")
+		os.MkdirAll(targetDir, 0755)
+		os.WriteFile(filepath.Join(targetDir, "index.html"), []byte("<html>Target</html>"), 0644)
+
+		// Create symlink config
+		linkPath := filepath.Join(tmpDir, "linked-site")
+		os.Symlink(targetDir, linkPath)
+
+		// loadApp should follow symlink
+		app, err := store.loadApp("linked-site", linkPath)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if app.Type != AppTypeStatic {
+			t.Errorf("expected AppTypeStatic, got %v", app.Type)
+		}
+		if app.FilePath != targetDir {
+			t.Errorf("expected FilePath %s, got %s", targetDir, app.FilePath)
+		}
+	})
+
+	t.Run("loads file path as static site", func(t *testing.T) {
+		// Create a simple file config pointing to a directory
+		staticDir := filepath.Join(tmpDir, "path-site")
+		os.MkdirAll(staticDir, 0755)
+		os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<html>Path</html>"), 0644)
+
+		configFile := filepath.Join(tmpDir, "pathconfig")
+		os.WriteFile(configFile, []byte(staticDir), 0644)
+
+		app, err := store.loadSimpleApp("pathconfig", configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if app.Type != AppTypeStatic {
+			t.Errorf("expected AppTypeStatic, got %v", app.Type)
+		}
+	})
+}
