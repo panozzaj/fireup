@@ -860,7 +860,14 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request, app *config.A
 			return
 		}
 		// Idle - start async and show interstitial
-		s.procs.StartAsync(app.Name, app.Command, app.Dir, app.Env)
+		_, err := s.procs.StartAsync(app.Name, app.Command, app.Dir, app.Env)
+		if err != nil {
+			// Immediate failure (e.g., directory doesn't exist)
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+			w.Write([]byte(interstitialPage(app.Name, s.cfg.TLD, s.getTheme(), true, err.Error())))
+			return
+		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		w.Write([]byte(interstitialPage(app.Name, s.cfg.TLD, s.getTheme(), false, "")))
@@ -961,7 +968,15 @@ func (s *Server) handleService(w http.ResponseWriter, r *http.Request, app *conf
 	}
 	// Idle - start async and show interstitial
 	s.logRequest("  -> INTERSTITIAL (idle, starting %s)", procName)
-	s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
+	_, err := s.procs.StartAsync(procName, svc.Command, svc.Dir, svc.Env)
+	if err != nil {
+		// Immediate failure (e.g., directory doesn't exist)
+		s.logRequest("  -> FAILED to start: %v", err)
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Write([]byte(interstitialPage(procName, s.cfg.TLD, s.getTheme(), true, err.Error())))
+		return
+	}
 	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	w.Write([]byte(interstitialPage(procName, s.cfg.TLD, s.getTheme(), false, "")))

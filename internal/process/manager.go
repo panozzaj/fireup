@@ -87,6 +87,10 @@ func (b *LogBuffer) Write(p []byte) (n int, err error) {
 		if line == "" {
 			continue
 		}
+		// Filter out shell warnings that aren't relevant to users
+		if strings.Contains(line, "can't change option: zle") {
+			continue
+		}
 		b.lines = append(b.lines, line)
 		if len(b.lines) > b.max {
 			b.lines = b.lines[1:]
