@@ -10,6 +10,10 @@ unset GOPATH
 go install ./cmd/roost-dev/
 
 echo "Stopping any running roost-dev..."
+# Use SIGTERM first to allow graceful shutdown (kills child processes)
+pkill -TERM roost-dev 2>/dev/null || true
+sleep 2
+# Then SIGKILL any stragglers
 pkill -9 roost-dev 2>/dev/null || true
 launchctl bootout gui/$(id -u)/com.roost-dev 2>/dev/null || true
 sleep 1

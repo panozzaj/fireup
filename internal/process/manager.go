@@ -117,11 +117,12 @@ func (b *LogBuffer) Clear() {
 
 // Manager manages running processes
 type Manager struct {
-	mu        sync.RWMutex
-	processes map[string]*Process
-	portStart int
-	portEnd   int
-	nextPort  int
+	mu            sync.RWMutex
+	processes     map[string]*Process
+	reservedPorts map[int]bool // ports allocated but not yet bound
+	portStart     int
+	portEnd       int
+	nextPort      int
 }
 
 // NewManager creates a new process manager
@@ -131,14 +132,16 @@ func NewManager() *Manager {
 	// Start from a random port to avoid conflicts with orphaned processes
 	nextPort := portStart + int(time.Now().UnixNano()%int64(portEnd-portStart))
 	return &Manager{
-		processes: make(map[string]*Process),
-		portStart: portStart,
-		portEnd:   portEnd,
-		nextPort:  nextPort,
+		processes:     make(map[string]*Process),
+		reservedPorts: make(map[int]bool),
+		portStart:     portStart,
+		portEnd:       portEnd,
+		nextPort:      nextPort,
 	}
 }
 
-// findFreePort finds an available port
+// findFreePort finds an available port and reserves it.
+// Caller must call releasePort if the port won't be used.
 func (m *Manager) findFreePort() (int, error) {
 	for i := 0; i < m.portEnd-m.portStart; i++ {
 		port := m.nextPort
@@ -147,14 +150,47 @@ func (m *Manager) findFreePort() (int, error) {
 			m.nextPort = m.portStart
 		}
 
-		// Check if port is in use
+		// Skip ports we've already reserved for other processes
+		if m.reservedPorts[port] {
+			fmt.Printf("[roost-dev] Port %d is reserved, skipping\n", port)
+			continue
+		}
+
+		// First check if anything is already LISTENING on this port
+		// This catches processes bound to 0.0.0.0 that wouldn't block our 127.0.0.1 bind
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 50*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			fmt.Printf("[roost-dev] Port %d has something listening, skipping\n", port)
+			continue
+		}
+
+		// Also check 0.0.0.0 binding to be thorough
+		conn, err = net.DialTimeout("tcp", fmt.Sprintf("0.0.0.0:%d", port), 50*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			fmt.Printf("[roost-dev] Port %d has something listening on 0.0.0.0, skipping\n", port)
+			continue
+		}
+
+		// Now check if we can bind to it
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			ln.Close()
+			// Reserve this port until the process binds or fails
+			m.reservedPorts[port] = true
+			fmt.Printf("[roost-dev] Allocated and reserved port %d\n", port)
 			return port, nil
 		}
+		fmt.Printf("[roost-dev] Port %d bind failed: %v\n", port, err)
 	}
 	return 0, fmt.Errorf("no free ports available in range %d-%d", m.portStart, m.portEnd)
+}
+
+// releasePort removes a port reservation
+func (m *Manager) releasePort(port int) {
+	fmt.Printf("[roost-dev] Released port reservation: %d\n", port)
+	delete(m.reservedPorts, port)
 }
 
 // Start starts a process
@@ -178,6 +214,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 		m.mu.Unlock()
 		return nil, err
 	}
+	fmt.Printf("[roost-dev] Starting %s on port %d\n", name, port)
 
 	// Create process
 	ctx, cancel := context.WithCancel(context.Background())
@@ -209,6 +246,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
@@ -216,6 +254,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
@@ -235,6 +274,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	// Start process
 	if err := cmd.Start(); err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("start process: %w", err)
 	}
@@ -246,6 +286,11 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 	// Monitor for exit
 	go func() {
 		err := cmd.Wait()
+		// Write log BEFORE setting failed flag to avoid race condition
+		// where status shows "failed" but logs are empty
+		if err != nil {
+			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
+		}
 		proc.mu.Lock()
 		if err != nil {
 			proc.failed = true
@@ -254,7 +299,6 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 			} else {
 				proc.exitError = err.Error()
 			}
-			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
 		}
 		proc.mu.Unlock()
 		// Don't delete failed processes so we can show their status
@@ -269,6 +313,13 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 
 	// Wait for port to be ready (keep checking until port ready or process exits)
 	go func() {
+		// Release port reservation when done (process bound or exited)
+		defer func() {
+			m.mu.Lock()
+			m.releasePort(port)
+			m.mu.Unlock()
+		}()
+
 		for {
 			// Check if process has exited
 			if proc.cmd.ProcessState != nil {
@@ -321,6 +372,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		m.mu.Unlock()
 		return nil, err
 	}
+	fmt.Printf("[roost-dev] Starting %s on port %d\n", name, port)
 
 	// Create process
 	ctx, cancel := context.WithCancel(context.Background())
@@ -351,6 +403,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
@@ -358,6 +411,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("stderr pipe: %w", err)
 	}
@@ -377,6 +431,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	// Start process
 	if err := cmd.Start(); err != nil {
 		cancel()
+		m.releasePort(port)
 		m.mu.Unlock()
 		return nil, fmt.Errorf("start process: %w", err)
 	}
@@ -388,6 +443,11 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	// Monitor for exit
 	go func() {
 		err := cmd.Wait()
+		// Write log BEFORE setting failed flag to avoid race condition
+		// where status shows "failed" but logs are empty
+		if err != nil {
+			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
+		}
 		proc.mu.Lock()
 		if err != nil {
 			proc.failed = true
@@ -396,7 +456,6 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 			} else {
 				proc.exitError = err.Error()
 			}
-			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
 		}
 		proc.mu.Unlock()
 	}()
@@ -637,6 +696,7 @@ func (p *Process) IsRunning() bool {
 		return false
 	}
 
+	fmt.Printf("[roost-dev] IsRunning: %s = true (port %d)\n", p.Name, p.Port)
 	return true
 }
 

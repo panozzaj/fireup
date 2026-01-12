@@ -1,6 +1,7 @@
 /* AI-highlighted log lines with sweep animation */
 .logs-content mark {
-    background: linear-gradient(90deg, #fef9c3 50%, transparent 50%);
+    --mark-color: #fef9c3;
+    background: linear-gradient(90deg, var(--mark-color) 50%, transparent 50%);
     background-size: 200% 100%;
     background-position: 100% 0;
     color: inherit;
@@ -15,10 +16,14 @@
     to { background-position: 0% 0; }
 }
 
-/* Dark mode mark highlighting - golden yellow for better contrast */
-[data-theme="dark"] .logs-content mark,
-:root:not([data-theme="light"]) .logs-content mark {
-    background: linear-gradient(90deg, #92702a 50%, transparent 50%);
-    background-size: 200% 100%;
-    background-position: 100% 0;
+/* Explicit dark mode */
+[data-theme="dark"] .logs-content mark {
+    --mark-color: #92702a;
+}
+
+/* System mode follows system preference */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .logs-content mark {
+        --mark-color: #92702a;
+    }
 }

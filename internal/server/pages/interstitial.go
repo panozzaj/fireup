@@ -232,11 +232,11 @@ h1 {
     display: block;
 }
 .claude-btn {
-    animation: claude-pulse 2.5s ease-in-out infinite;
+    animation: claude-pulse 5s ease-in-out infinite;
 }
 @keyframes claude-pulse {
-    0%, 80%, 100% { color: #da7756; }
-    90% { color: #C15F3C; }
+    0%, 40%, 100% { color: #da7756; }
+    50%, 90% { color: #C15F3C; }
 }
 `
 
