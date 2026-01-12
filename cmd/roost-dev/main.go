@@ -622,22 +622,22 @@ func runList() error {
 			}
 		}
 
-		// Add color codes for terminal
-		statusStr := status
+		// Pad status first, then add color codes (so ANSI codes don't affect width)
+		paddedStatus := fmt.Sprintf("%-10s", status)
 		switch {
 		case status == "running":
-			statusStr = "\033[32m" + status + "\033[0m" // green
+			paddedStatus = "\033[32m" + paddedStatus + "\033[0m" // green
 		case status == "stopped":
-			statusStr = "\033[90m" + status + "\033[0m" // gray
+			paddedStatus = "\033[90m" + paddedStatus + "\033[0m" // gray
 		case strings.Contains(status, "/"):
-			statusStr = "\033[33m" + status + "\033[0m" // yellow for partial
+			paddedStatus = "\033[33m" + paddedStatus + "\033[0m" // yellow for partial
 		}
 
 		name := app.Name
 		if len(app.Aliases) > 0 {
 			name = fmt.Sprintf("%s (%s)", app.Name, strings.Join(app.Aliases, ", "))
 		}
-		fmt.Printf("%-25s %-10s %s\n", name, statusStr, app.URL)
+		fmt.Printf("%-25s %s %s\n", name, paddedStatus, app.URL)
 	}
 
 	return nil
