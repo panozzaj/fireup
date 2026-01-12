@@ -2,6 +2,8 @@
 
 A local development proxy for all your projects. Like [puma-dev](https://github.com/puma/puma-dev), but language-agnostic.
 
+> **Warning**: This is a development tool only. Do not use in production.
+
 ## Features
 
 - Works with any web server (Node, Ruby, Python, Elixir, Go, Rust, etc.)
