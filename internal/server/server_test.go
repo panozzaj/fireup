@@ -281,6 +281,113 @@ func TestEnsureDependenciesIntegration(t *testing.T) {
 	})
 }
 
+func TestFindApp(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	// Create test apps
+	yamlContent := `
+name: blog
+alias: panozzaj
+root: /tmp/blog
+cmd: bin/serve
+`
+	os.WriteFile(tmpDir+"/blog.yml", []byte(yamlContent), 0644)
+
+	yamlContent2 := `
+name: mateams
+aliases:
+  - ma
+  - wt
+root: /tmp/mateams
+cmd: rails server
+`
+	os.WriteFile(tmpDir+"/mateams.yml", []byte(yamlContent2), 0644)
+
+	apps.Load()
+
+	t.Run("finds app by exact name", func(t *testing.T) {
+		app, found := s.findApp("blog")
+		if !found {
+			t.Fatal("expected to find blog app by name")
+		}
+		if app.Name != "blog" {
+			t.Errorf("expected app name 'blog', got %s", app.Name)
+		}
+	})
+
+	t.Run("finds app by alias", func(t *testing.T) {
+		app, found := s.findApp("panozzaj")
+		if !found {
+			t.Fatal("expected to find blog app by alias 'panozzaj'")
+		}
+		if app.Name != "blog" {
+			t.Errorf("expected app name 'blog', got %s", app.Name)
+		}
+	})
+
+	t.Run("finds app by multiple aliases", func(t *testing.T) {
+		app1, found1 := s.findApp("ma")
+		if !found1 {
+			t.Fatal("expected to find mateams by alias 'ma'")
+		}
+		if app1.Name != "mateams" {
+			t.Errorf("expected app name 'mateams', got %s", app1.Name)
+		}
+
+		app2, found2 := s.findApp("wt")
+		if !found2 {
+			t.Fatal("expected to find mateams by alias 'wt'")
+		}
+		if app2.Name != "mateams" {
+			t.Errorf("expected app name 'mateams', got %s", app2.Name)
+		}
+	})
+
+	t.Run("returns false for unknown app", func(t *testing.T) {
+		_, found := s.findApp("nonexistent")
+		if found {
+			t.Error("expected not to find nonexistent app")
+		}
+	})
+
+	t.Run("strips subdomain to find app", func(t *testing.T) {
+		// Simulate accessing admin.mateams.test
+		app, found := s.findApp("admin.mateams")
+		if !found {
+			t.Fatal("expected to find mateams via subdomain 'admin.mateams'")
+		}
+		if app.Name != "mateams" {
+			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		}
+	})
+
+	t.Run("strips subdomain and resolves alias", func(t *testing.T) {
+		// Simulate accessing api.ma.test (ma is alias for mateams)
+		app, found := s.findApp("api.ma")
+		if !found {
+			t.Fatal("expected to find mateams via subdomain 'api.ma'")
+		}
+		if app.Name != "mateams" {
+			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		}
+	})
+
+	t.Run("handles multiple subdomain levels", func(t *testing.T) {
+		// Simulate accessing foo.bar.mateams.test
+		app, found := s.findApp("foo.bar.mateams")
+		if !found {
+			t.Fatal("expected to find mateams via 'foo.bar.mateams'")
+		}
+		if app.Name != "mateams" {
+			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		}
+	})
+}
+
 func TestDependencyStatusChecking(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{TLD: "test", Dir: tmpDir}

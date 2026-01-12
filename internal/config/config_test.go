@@ -392,6 +392,162 @@ func TestTopologicalSort(t *testing.T) {
 	})
 }
 
+func TestAliasResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &Config{Dir: tmpDir}
+
+	t.Run("parses single alias from YAML", func(t *testing.T) {
+		yaml := `
+name: blog
+alias: panozzaj
+root: /tmp/blog
+cmd: bin/serve
+`
+		os.WriteFile(filepath.Join(tmpDir, "blog.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		app, found := store.Get("blog")
+		if !found {
+			t.Fatal("expected blog app to be loaded")
+		}
+		if len(app.Aliases) != 1 || app.Aliases[0] != "panozzaj" {
+			t.Errorf("expected alias 'panozzaj', got %v", app.Aliases)
+		}
+	})
+
+	t.Run("parses multiple aliases from YAML", func(t *testing.T) {
+		yaml := `
+name: mysite
+aliases:
+  - site1
+  - site2
+  - site3
+root: /tmp/mysite
+cmd: npm start
+`
+		os.WriteFile(filepath.Join(tmpDir, "mysite.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		app, found := store.Get("mysite")
+		if !found {
+			t.Fatal("expected mysite app to be loaded")
+		}
+		if len(app.Aliases) != 3 {
+			t.Errorf("expected 3 aliases, got %d", len(app.Aliases))
+		}
+	})
+
+	t.Run("merges alias and aliases fields", func(t *testing.T) {
+		yaml := `
+name: merged
+alias: single
+aliases:
+  - multi1
+  - multi2
+root: /tmp/merged
+cmd: npm start
+`
+		os.WriteFile(filepath.Join(tmpDir, "merged.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		app, found := store.Get("merged")
+		if !found {
+			t.Fatal("expected merged app to be loaded")
+		}
+		// Should have all 3 aliases
+		if len(app.Aliases) != 3 {
+			t.Errorf("expected 3 aliases (merged), got %d: %v", len(app.Aliases), app.Aliases)
+		}
+	})
+
+	t.Run("GetByNameOrAlias finds by exact name", func(t *testing.T) {
+		yaml := `
+name: exactapp
+alias: exactalias
+root: /tmp/exactapp
+cmd: npm start
+`
+		os.WriteFile(filepath.Join(tmpDir, "exactapp.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		app, found := store.GetByNameOrAlias("exactapp")
+		if !found {
+			t.Fatal("expected to find app by exact name")
+		}
+		if app.Name != "exactapp" {
+			t.Errorf("expected name 'exactapp', got %s", app.Name)
+		}
+	})
+
+	t.Run("GetByNameOrAlias finds by alias", func(t *testing.T) {
+		yaml := `
+name: realname
+alias: nickname
+root: /tmp/realname
+cmd: npm start
+`
+		os.WriteFile(filepath.Join(tmpDir, "realname.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		app, found := store.GetByNameOrAlias("nickname")
+		if !found {
+			t.Fatal("expected to find app by alias")
+		}
+		if app.Name != "realname" {
+			t.Errorf("expected name 'realname', got %s", app.Name)
+		}
+	})
+
+	t.Run("GetByNameOrAlias returns false for unknown", func(t *testing.T) {
+		store := NewAppStore(cfg)
+		store.Load()
+
+		_, found := store.GetByNameOrAlias("nonexistent")
+		if found {
+			t.Error("expected not to find nonexistent app")
+		}
+	})
+
+	t.Run("GetService finds multi-service app by alias", func(t *testing.T) {
+		yaml := `
+name: multiserviceapp
+alias: msa
+root: /tmp/multiserviceapp
+services:
+  web:
+    cmd: rails server
+  worker:
+    cmd: sidekiq
+`
+		os.WriteFile(filepath.Join(tmpDir, "multiserviceapp.yml"), []byte(yaml), 0644)
+
+		store := NewAppStore(cfg)
+		store.Load()
+
+		// Should find by alias
+		app, svc, found := store.GetService("msa", "web")
+		if !found {
+			t.Fatal("expected to find service via app alias")
+		}
+		if app.Name != "multiserviceapp" {
+			t.Errorf("expected app name 'multiserviceapp', got %s", app.Name)
+		}
+		if svc.Name != "web" {
+			t.Errorf("expected service name 'web', got %s", svc.Name)
+		}
+	})
+}
+
 func TestDependsOnParsing(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &Config{Dir: tmpDir}
