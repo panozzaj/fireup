@@ -46,52 +46,82 @@ func printLogo() {
 }
 
 func main() {
-	// Track what action to take
-	runServer := false
-	doInstall := false
-	doUninstall := false
-
-	// Check for subcommands first (anything that doesn't start with -)
-	if len(os.Args) >= 2 && !strings.HasPrefix(os.Args[1], "-") {
-		switch os.Args[1] {
-		case "serve":
-			// Remove "serve" from args so flag parsing works
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			runServer = true
-		case "start", "stop", "restart":
-			if len(os.Args) < 3 {
-				fmt.Fprintf(os.Stderr, "Usage: roost-dev %s <app-name>\n", os.Args[1])
-				os.Exit(1)
-			}
-			if err := runCommand(os.Args[1], os.Args[2]); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
-		case "list", "ls":
-			if err := runList(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			os.Exit(0)
-		case "install":
-			// Remove "install" from args so flag parsing works for --tld
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			doInstall = true
-		case "uninstall":
-			// Remove "uninstall" from args so flag parsing works for --tld
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			doUninstall = true
-		case "help":
-			printUsage()
-			os.Exit(0)
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown command: %s\nRun 'roost-dev help' for usage.\n", os.Args[1])
-			os.Exit(1)
-		}
+	// Handle no args or help
+	if len(os.Args) < 2 {
+		printMainUsage()
+		os.Exit(0)
 	}
 
-	// Flags
+	// Handle global flags before command
+	if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
+		printMainUsage()
+		os.Exit(0)
+	}
+	if os.Args[1] == "-v" || os.Args[1] == "--version" || os.Args[1] == "version" {
+		fmt.Printf("roost-dev %s\n", version)
+		os.Exit(0)
+	}
+
+	// Route to command
+	cmd := os.Args[1]
+	args := os.Args[2:]
+
+	switch cmd {
+	case "serve":
+		cmdServe(args)
+	case "list", "ls":
+		cmdList(args)
+	case "start":
+		cmdAppControl("start", args)
+	case "stop":
+		cmdAppControl("stop", args)
+	case "restart":
+		cmdAppControl("restart", args)
+	case "install":
+		cmdInstall(args)
+	case "uninstall":
+		cmdUninstall(args)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\nRun 'roost-dev help' for usage.\n", cmd)
+		os.Exit(1)
+	}
+}
+
+func printMainUsage() {
+	printLogo()
+	fmt.Println(`
+roost-dev - Local development proxy for all your projects
+
+USAGE:
+    roost-dev <command> [options]
+
+COMMANDS:
+    serve             Start the roost-dev server
+    list, ls          List configured apps and their status
+    start <app>       Start an app
+    stop <app>        Stop an app
+    restart <app>     Restart an app
+    install           Setup port forwarding (requires sudo)
+    uninstall         Remove port forwarding config (requires sudo)
+    help              Show this help
+    version           Show version
+
+Run 'roost-dev <command> --help' for command-specific options.
+
+QUICK START:
+    sudo roost-dev install        # One-time setup
+    roost-dev serve               # Start the server
+    echo "npm start" > ~/.config/roost-dev/myapp
+    # Visit http://myapp.localhost`)
+}
+
+// cmdServe handles the 'serve' command
+func cmdServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+
+	homeDir, _ := os.UserHomeDir()
+	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
+
 	var (
 		configDir     string
 		httpPort      int
@@ -99,32 +129,63 @@ func main() {
 		advertisePort int
 		dnsPort       int
 		tld           string
-		showHelp      bool
-		showVer       bool
-		doSetup       bool
-		doCleanup     bool
 	)
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal(err)
+	fs.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
+	fs.IntVar(&httpPort, "http-port", 9280, "HTTP port to listen on")
+	fs.IntVar(&httpsPort, "https-port", 9443, "HTTPS port to listen on")
+	fs.IntVar(&advertisePort, "advertise-port", 80, "Port to use in URLs (0 = same as http-port)")
+	fs.IntVar(&dnsPort, "dns-port", 9053, "DNS server port")
+	fs.StringVar(&tld, "tld", "", "Top-level domain (default: from config or 'localhost')")
+
+	fs.Usage = func() {
+		fmt.Println(`roost-dev serve - Start the roost-dev server
+
+USAGE:
+    roost-dev serve [options]
+
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+CONFIGURATION:
+    Place config files in ~/.config/roost-dev/
+
+    Command (recommended):
+        echo "npm run dev" > ~/.config/roost-dev/myapp
+        # roost-dev assigns a dynamic PORT, avoiding conflicts
+
+    Static site (symlink to directory):
+        ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+        # Directory must contain index.html
+
+    Fixed port proxy (not recommended):
+        echo "3000" > ~/.config/roost-dev/myapp
+        # Fixed ports can conflict; prefer commands with $PORT
+
+    YAML config (for multi-service projects):
+        name: myproject
+        root: ~/projects/myproject
+        services:
+          backend:
+            cmd: mix phx.server -p $PORT
+          frontend:
+            cmd: npm start
+            env:
+              API_URL: http://backend-myproject.localhost
+
+    Commands receive the port via the $PORT environment variable.
+    Your command should listen on this port (e.g., "rails server -p $PORT").`)
 	}
-	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
 
-	flag.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
-	flag.IntVar(&httpPort, "http-port", 9280, "HTTP port to listen on")
-	flag.IntVar(&httpsPort, "https-port", 9443, "HTTPS port to listen on")
-	flag.IntVar(&advertisePort, "advertise-port", 80, "Port to use in URLs (0 = same as http-port)")
-	flag.IntVar(&dnsPort, "dns-port", 9053, "DNS server port")
-	flag.StringVar(&tld, "tld", "", "Top-level domain to use (default: from config or 'localhost')")
-	flag.BoolVar(&showHelp, "help", false, "Show help")
-	flag.BoolVar(&showVer, "version", false, "Show version")
-	flag.BoolVar(&doSetup, "setup", false, "Setup pf rules for port forwarding (requires sudo)")
-	flag.BoolVar(&doCleanup, "cleanup", false, "Remove pf rules (requires sudo)")
+	// Check for help before parsing
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
+			os.Exit(0)
+		}
+	}
 
-	// Use our custom usage function so flag errors show subcommands
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.Parse(args)
 
 	// Load saved config for TLD default
 	globalCfg, err := loadGlobalConfig(configDir)
@@ -134,36 +195,6 @@ func main() {
 	}
 	if tld == "" {
 		tld = globalCfg.TLD
-	}
-
-	if showHelp {
-		printUsage()
-		os.Exit(0)
-	}
-
-	if showVer {
-		fmt.Printf("roost-dev %s\n", version)
-		os.Exit(0)
-	}
-
-	if doSetup || doInstall {
-		if err := runSetup(configDir, httpPort, dnsPort, tld); err != nil {
-			log.Fatalf("Install failed: %v", err)
-		}
-		os.Exit(0)
-	}
-
-	if doCleanup || doUninstall {
-		if err := runCleanup(tld); err != nil {
-			log.Fatalf("Uninstall failed: %v", err)
-		}
-		os.Exit(0)
-	}
-
-	// If no serve command and no special flags, show help
-	if !runServer {
-		printUsage()
-		os.Exit(0)
 	}
 
 	// Ensure config directory exists
@@ -249,10 +280,10 @@ func main() {
 			reset := "\033[0m"
 			fmt.Println(yellow + "WARNING: URLs like http://myapp.localhost won't work yet.")
 			fmt.Println("")
-			fmt.Println("  roost-dev is running on port 9080, but your browser will")
+			fmt.Println("  roost-dev is running on port 9280, but your browser will")
 			fmt.Println("  try port 80. Run this once to set up the redirect:")
 			fmt.Println("")
-			fmt.Println("    sudo roost-dev --setup")
+			fmt.Println("    sudo roost-dev install")
 			fmt.Println(reset)
 		}
 	}
@@ -262,93 +293,144 @@ func main() {
 	}
 }
 
-func printUsage() {
-	printLogo()
-	fmt.Println(`
-roost-dev - Local development proxy for all your projects
+// cmdList handles the 'list' command
+func cmdList(args []string) {
+	// Check for help
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev list - List configured apps and their status
 
 USAGE:
-    roost-dev <command> [options]
+    roost-dev list
 
-COMMANDS:
-    serve           Start the roost-dev server
-    list, ls        List configured apps and their status
-    start <app>     Start an app
-    stop <app>      Stop an app
-    restart <app>   Restart an app
-    install         Setup pf rules and DNS for port forwarding (requires sudo)
-    uninstall       Remove pf rules and DNS configuration (requires sudo)
+Shows all configured apps, their running status, and URLs.
+If the server is not running, shows config files only.`)
+			os.Exit(0)
+		}
+	}
 
-OPTIONS:
-    --dir <path>          Configuration directory (default: ~/.config/roost-dev)
-    --http-port <n>       HTTP port to listen on (default: 9280)
-    --https-port <n>      HTTPS port to listen on (default: 9443)
-    --advertise-port <n>  Port to use in URLs (default: 80)
-    --dns-port <n>        DNS server port (default: 9053)
-    --tld <domain>        Top-level domain to use (default: localhost)
-    --help                Show this help
-    --version             Show version
+	if err := runList(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-CONFIGURATION:
-    Place config files in ~/.config/roost-dev/
+// cmdAppControl handles start/stop/restart commands
+func cmdAppControl(action string, args []string) {
+	// Check for help
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Printf(`roost-dev %s - %s an app
 
-    Command (recommended):
-        echo "npm run dev" > ~/.config/roost-dev/myapp
-        # roost-dev assigns a dynamic PORT, avoiding conflicts
+USAGE:
+    roost-dev %s <app-name>
 
-    Static site (symlink to directory):
-        ln -s ~/projects/my-site ~/.config/roost-dev/mysite
-        # Directory must contain index.html
+Requires the roost-dev server to be running.
+`, action, strings.Title(action), action)
+			os.Exit(0)
+		}
+	}
 
-    Fixed port proxy (not recommended):
-        echo "3000" > ~/.config/roost-dev/myapp
-        # Fixed ports can conflict; prefer commands with $PORT
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: roost-dev %s <app-name>\n", action)
+		os.Exit(1)
+	}
 
-    YAML config (for multi-service projects):
-        # ~/.config/roost-dev/myproject.yml
-        name: myproject
-        root: ~/projects/myproject
-        services:
-          backend:
-            cmd: mix phx.server -p $PORT
-          frontend:
-            cmd: npm start
-            env:
-              API_URL: http://backend-myproject.localhost
+	if err := runCommand(action, args[0]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-        # Access at http://frontend-myproject.localhost
-        # Access at http://backend-myproject.localhost
+// cmdInstall handles the 'install' command
+func cmdInstall(args []string) {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
 
-    Commands receive the port via the $PORT environment variable.
-    Your command should listen on this port (e.g., "rails server -p $PORT").
+	homeDir, _ := os.UserHomeDir()
+	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
 
-SETUP (recommended):
-    # One-time install for .localhost (pf rules only)
-    sudo roost-dev install
+	var (
+		tld       string
+		configDir string
+	)
 
-    # Or install for .test TLD (pf rules + DNS resolver)
-    sudo roost-dev install --tld test
+	fs.StringVar(&tld, "tld", "localhost", "Top-level domain to configure")
+	fs.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
 
-    # Then start the server (no sudo needed)
-    roost-dev serve              # for .localhost
-    roost-dev serve --tld test   # for .test
+	fs.Usage = func() {
+		fmt.Println(`roost-dev install - Setup port forwarding for roost-dev
 
-    # Remove configuration
-    sudo roost-dev uninstall
-    sudo roost-dev uninstall --tld test
+USAGE:
+    sudo roost-dev install [options]
+
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+DESCRIPTION:
+    Sets up macOS pf (packet filter) rules to forward port 80 to roost-dev.
+    This allows accessing apps at http://myapp.localhost without specifying a port.
+
+    For custom TLDs like .test, also creates a DNS resolver file.
 
 EXAMPLES:
-    # After running install, start the server
-    roost-dev serve
+    sudo roost-dev install              # Setup for .localhost
+    sudo roost-dev install --tld test   # Setup for .test TLD`)
+	}
 
-    # Use .test TLD (requires install --tld test first)
-    roost-dev serve --tld test
+	// Check for help before parsing
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
+			os.Exit(0)
+		}
+	}
 
-    # Or run with sudo on port 80 directly (no setup needed)
-    sudo roost-dev serve --http-port 80 --advertise-port 80
+	fs.Parse(args)
 
-    # List all configured apps
-    roost-dev list`)
+	if err := runSetup(configDir, 9280, 9053, tld); err != nil {
+		log.Fatalf("Install failed: %v", err)
+	}
+}
+
+// cmdUninstall handles the 'uninstall' command
+func cmdUninstall(args []string) {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+
+	var tld string
+	fs.StringVar(&tld, "tld", "localhost", "Top-level domain to remove")
+
+	fs.Usage = func() {
+		fmt.Println(`roost-dev uninstall - Remove roost-dev port forwarding config
+
+USAGE:
+    sudo roost-dev uninstall [options]
+
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+DESCRIPTION:
+    Removes the pf anchor file and DNS resolver (if using custom TLD).
+    Does not modify /etc/pf.conf - you may want to manually remove
+    the roost-dev lines or restore from the backup.
+
+EXAMPLES:
+    sudo roost-dev uninstall              # Remove .localhost config
+    sudo roost-dev uninstall --tld test   # Remove .test TLD config`)
+	}
+
+	// Check for help before parsing
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
+			os.Exit(0)
+		}
+	}
+
+	fs.Parse(args)
+
+	if err := runCleanup(tld); err != nil {
+		log.Fatalf("Uninstall failed: %v", err)
+	}
 }
 
 const (
@@ -565,7 +647,7 @@ rdr pass on lo0 inet proto tcp from any to any port 80 -> 127.0.0.1 port 9280
 	fmt.Println()
 	fmt.Println("You can now run roost-dev without sudo:")
 	fmt.Println()
-	fmt.Println("    roost-dev")
+	fmt.Println("    roost-dev serve")
 	fmt.Println()
 	fmt.Printf("Then access your apps at http://appname.%s\n", tld)
 	if needsUpdate {
@@ -762,7 +844,7 @@ func listConfigFiles(configDir, tld string) error {
 		url := fmt.Sprintf("http://%s.%s", app, tld)
 		fmt.Printf("%-20s %s\n", app, url)
 	}
-	fmt.Println("\nStart the server with: roost-dev")
+	fmt.Println("\nStart the server with: roost-dev serve")
 
 	return nil
 }
