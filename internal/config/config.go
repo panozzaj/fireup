@@ -371,7 +371,25 @@ func (s *AppStore) GetService(appName, serviceName string) (*App, *Service, bool
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Try exact match first
 	app, ok := s.apps[appName]
+
+	// If not found, try aliases
+	if !ok {
+		for _, a := range s.apps {
+			for _, alias := range a.Aliases {
+				if alias == appName {
+					app = a
+					ok = true
+					break
+				}
+			}
+			if ok {
+				break
+			}
+		}
+	}
+
 	if !ok || app.Type != AppTypeYAML {
 		return nil, nil, false
 	}

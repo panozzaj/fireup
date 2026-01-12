@@ -98,8 +98,8 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 // findApp tries to find an app by progressively shorter names
 // e.g., "admin.mateams" → try "admin.mateams", then "mateams"
 func (s *Server) findApp(name string) (*config.App, bool) {
-	// Try exact match first
-	if app, found := s.apps.Get(name); found {
+	// Try exact match or alias first
+	if app, found := s.apps.GetByNameOrAlias(name); found {
 		return app, true
 	}
 
@@ -110,7 +110,7 @@ func (s *Server) findApp(name string) (*config.App, bool) {
 			break
 		}
 		name = name[idx+1:]
-		if app, found := s.apps.Get(name); found {
+		if app, found := s.apps.GetByNameOrAlias(name); found {
 			return app, true
 		}
 	}
