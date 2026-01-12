@@ -260,6 +260,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	case "/api/open-terminal":
 		s.handleOpenTerminal(w, r)
 
+	case "/api/open-config":
+		s.handleOpenConfig(w, r)
+
+	case "/api/config-path":
+		s.handleConfigPath(w, r)
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -385,6 +391,73 @@ end tell`, escDir, s.cfg.ClaudeCommand, escPromptFile, escPromptFile)
 		os.Remove(promptFile)
 		s.logRequest("Failed to open terminal: %v, output: %s", err, string(output))
 		http.Error(w, fmt.Sprintf("failed to open terminal: %v (%s)", err, string(output)), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// getConfigPath returns the config file path for an app
+func (s *Server) getConfigPath(name string) string {
+	// For service names like "web-myapp", extract the app name
+	appName := name
+	if idx := strings.Index(name, "-"); idx != -1 {
+		possibleApp := name[idx+1:]
+		if _, found := s.apps.Get(possibleApp); found {
+			appName = possibleApp
+		}
+	}
+
+	// Resolve alias to app name
+	if app, found := s.apps.GetByNameOrAlias(appName); found {
+		appName = app.Name
+	}
+
+	// Check for .yml first, then .yaml
+	ymlPath := fmt.Sprintf("%s/%s.yml", s.cfg.Dir, appName)
+	if _, err := os.Stat(ymlPath); err == nil {
+		return ymlPath
+	}
+	yamlPath := fmt.Sprintf("%s/%s.yaml", s.cfg.Dir, appName)
+	if _, err := os.Stat(yamlPath); err == nil {
+		return yamlPath
+	}
+	// Check for plain file (no extension)
+	plainPath := fmt.Sprintf("%s/%s", s.cfg.Dir, appName)
+	if _, err := os.Stat(plainPath); err == nil {
+		return plainPath
+	}
+	// Default to .yml
+	return ymlPath
+}
+
+// handleConfigPath returns the config file path for an app
+func (s *Server) handleConfigPath(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "name parameter required", http.StatusBadRequest)
+		return
+	}
+
+	configPath := s.getConfigPath(name)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"path": configPath})
+}
+
+// handleOpenConfig opens the config file in the default editor
+func (s *Server) handleOpenConfig(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "name parameter required", http.StatusBadRequest)
+		return
+	}
+
+	configPath := s.getConfigPath(name)
+
+	// Use 'open' command on macOS to open in default editor
+	cmd := exec.Command("open", configPath)
+	if err := cmd.Run(); err != nil {
+		http.Error(w, fmt.Sprintf("failed to open config: %v", err), http.StatusInternalServerError)
 		return
 	}
 

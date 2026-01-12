@@ -43,11 +43,12 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
         <div class="spinner" id="spinner"></div>
         <div class="logs" id="logs">
             <div class="logs-header">
-                <div class="logs-title">Logs</div>
+                <div class="logs-title">Logs <span class="config-path" id="config-path"></span></div>
                 <div class="logs-buttons">
                     <button class="btn copy-btn" id="copy-btn" onclick="copyLogs()">Copy</button>
                     <button class="btn copy-btn" id="copy-agent-btn" onclick="copyForAgent()">Copy for agent</button>
                     <button class="btn copy-btn" id="fix-btn" onclick="fixWithClaudeCode()" style="display: none;">Fix with Claude Code</button>
+                    <button class="btn copy-btn" id="config-btn" onclick="openConfig()">Open Config</button>
                 </div>
             </div>
             <div class="logs-content" id="logs-content"><span class="logs-empty">Waiting for output...</span></div>
@@ -139,6 +140,12 @@ h1 {
     color: var(--text-secondary);
     font-size: 12px;
     margin-bottom: 8px;
+}
+.config-path {
+    color: var(--text-muted);
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 11px;
+    margin-left: 8px;
 }
 .logs-content {
     font-family: "SF Mono", Monaco, monospace;
@@ -379,9 +386,10 @@ function copyForAgent() {
     const btn = document.getElementById('copy-agent-btn');
     const logs = content.textContent;
     const bt = String.fromCharCode(96);
+    const configPath = document.getElementById('config-path').textContent || '~/.config/roost-dev/' + appName + '.yml';
     const context = 'I am using roost-dev, a local development server that manages apps via config files in ~/.config/roost-dev/.\n\n' +
         'The app "' + appName + '" failed to start. The config file is at:\n' +
-        '~/.config/roost-dev/' + appName + '.yml\n\n' +
+        configPath + '\n\n' +
         'Here are the startup logs:\n\n' +
         bt+bt+bt + '\n' + logs + '\n' + bt+bt+bt + '\n\n' +
         'Please help me understand and fix this error.';
@@ -395,6 +403,48 @@ function copyForAgent() {
     document.body.removeChild(textarea);
     btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy for agent', 500);
+}
+
+async function openConfig() {
+    const btn = document.getElementById('config-btn');
+    btn.textContent = 'Opening...';
+    btn.disabled = true;
+    try {
+        const res = await fetch('http://roost-dev.' + tld + '/api/open-config?name=' + encodeURIComponent(appName));
+        if (!res.ok) {
+            console.error('Failed to open config');
+            btn.textContent = 'Error';
+            setTimeout(() => {
+                btn.textContent = 'Open Config';
+                btn.disabled = false;
+            }, 2000);
+            return;
+        }
+        btn.textContent = 'Opened!';
+        setTimeout(() => {
+            btn.textContent = 'Open Config';
+            btn.disabled = false;
+        }, 1000);
+    } catch (e) {
+        console.error('Failed to open config:', e);
+        btn.textContent = 'Error';
+        setTimeout(() => {
+            btn.textContent = 'Open Config';
+            btn.disabled = false;
+        }, 2000);
+    }
+}
+
+async function fetchConfigPath() {
+    try {
+        const res = await fetch('http://roost-dev.' + tld + '/api/config-path?name=' + encodeURIComponent(appName));
+        const data = await res.json();
+        if (data.path) {
+            document.getElementById('config-path').textContent = data.path;
+        }
+    } catch (e) {
+        console.log('Failed to fetch config path:', e);
+    }
 }
 
 async function restartAndRetry() {
@@ -426,6 +476,9 @@ async function restartAndRetry() {
         document.getElementById('spinner').style.display = 'none';
     }
 }
+
+// Fetch config path on load
+fetchConfigPath();
 
 if (failed) {
     const errorMsg = container.dataset.error || '';
