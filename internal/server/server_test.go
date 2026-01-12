@@ -8,6 +8,31 @@ import (
 	"github.com/panozzaj/roost-dev/internal/process"
 )
 
+func TestSlugify(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"My App", "my-app"},
+		{"MyApp", "myapp"},
+		{"my-app", "my-app"},
+		{"MY APP", "my-app"},
+		{"web service", "web-service"},
+		{"", ""},
+		{"API Server", "api-server"},
+		{"  spaced  ", "--spaced--"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got := slugify(tc.input)
+			if got != tc.expected {
+				t.Errorf("slugify(%q) = %q, want %q", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
 // newTestServer creates a server with injected dependencies for testing
 func newTestServer(cfg *config.Config, apps *config.AppStore, procs *process.Manager) *Server {
 	return &Server{
