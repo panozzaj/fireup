@@ -18,17 +18,17 @@ A local development proxy for all your projects. Like [puma-dev](https://github.
 # One-time install (forwards port 80 to roost-dev)
 sudo roost-dev install
 
-# Start the server
+# Start the server (or use: roost-dev service install)
 roost-dev serve
-
-# Verify it's working
-open http://roost-test.localhost
-
-# Open the dashboard
-open http://roost-dev.localhost
 ```
 
-Then create configs in `~/.config/roost-dev/` for your apps (see Configuration below).
+Then visit:
+- **http://roost-test.localhost** - Verify it's working
+- **http://roost-dev.localhost** - Open the dashboard
+
+Create configs in `~/.config/roost-dev/` for your apps (see Configuration below).
+
+> Using a custom TLD? Replace `.localhost` with your TLD (e.g., `.test`).
 
 ## Configuration
 

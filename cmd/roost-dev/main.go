@@ -119,8 +119,7 @@ Run 'roost-dev <command> --help' for command-specific options.
 QUICK START:
     sudo roost-dev install        # One-time setup
     roost-dev serve               # Start the server
-    open http://roost-test.localhost   # Verify it's working
-    open http://roost-dev.localhost    # Open dashboard`)
+    # Then visit http://roost-dev.localhost (or .test if using custom TLD)`)
 }
 
 // cmdServe handles the 'serve' command
