@@ -644,13 +644,19 @@ func TestLoadStaticApp(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects directory without index.html", func(t *testing.T) {
+	t.Run("allows directory without index.html", func(t *testing.T) {
 		emptyDir := filepath.Join(tmpDir, "empty-site")
 		os.MkdirAll(emptyDir, 0755)
 
-		_, err := store.loadStaticApp("empty-site", emptyDir)
-		if err == nil {
-			t.Error("expected error for directory without index.html")
+		app, err := store.loadStaticApp("empty-site", emptyDir)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if app.Type != AppTypeStatic {
+			t.Errorf("expected AppTypeStatic, got %v", app.Type)
+		}
+		if app.FilePath != emptyDir {
+			t.Errorf("expected FilePath %s, got %s", emptyDir, app.FilePath)
 		}
 	})
 

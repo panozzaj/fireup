@@ -152,18 +152,9 @@ func (s *AppStore) loadApp(name, path string) (*App, error) {
 
 // loadStaticApp creates an app config for static file serving
 func (s *AppStore) loadStaticApp(name, path string) (*App, error) {
-	// Check if it's a directory or file
-	info, err := os.Stat(path)
-	if err != nil {
+	// Verify path exists
+	if _, err := os.Stat(path); err != nil {
 		return nil, err
-	}
-
-	if info.IsDir() {
-		// Check for index.html
-		indexPath := filepath.Join(path, "index.html")
-		if _, err := os.Stat(indexPath); err != nil {
-			return nil, fmt.Errorf("directory has no index.html: %s", path)
-		}
 	}
 
 	return &App{
@@ -227,13 +218,9 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		if root == "" {
 			return nil, fmt.Errorf("static: true requires root to be set")
 		}
-		// Verify root exists and has index.html
+		// Verify root exists
 		if _, err := os.Stat(root); err != nil {
 			return nil, fmt.Errorf("static root not found: %s", root)
-		}
-		indexPath := filepath.Join(root, "index.html")
-		if _, err := os.Stat(indexPath); err != nil {
-			return nil, fmt.Errorf("static root has no index.html: %s", root)
 		}
 		return &App{
 			Name:        appName,
