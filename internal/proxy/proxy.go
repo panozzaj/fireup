@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-const asciiLogo = `
-    ___  ___  ___  ____ _____      ___  ____ _  _
-    |__| |  | |  | [__   |   ____ |  \ |___ |  |
-    |  \ |__| |__| ___]  |        |__/ |___  \/
-`
-
 // ReverseProxy handles proxying requests to backend services
 type ReverseProxy struct {
 	target *url.URL
