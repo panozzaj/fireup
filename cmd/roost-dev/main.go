@@ -114,7 +114,7 @@ COMMANDS:
     install           Setup port forwarding (requires sudo)
     uninstall         Remove port forwarding config (requires sudo)
     service           Manage roost-dev as a background service
-    cert              Manage HTTPS certificates (requires mkcert)
+    cert              Manage HTTPS certificates
     help              Show this help
     version           Show version
 
@@ -812,8 +812,8 @@ func cmdCertUninstall(args []string) {
 USAGE:
     roost-dev cert uninstall
 
-Removes the certificates from the roost-dev config directory.
-The mkcert root CA is not removed (use 'mkcert -uninstall' for that).`)
+Removes the roost-dev CA and certificates from the config directory.
+Also removes the CA from the system trust store (requires sudo).`)
 			os.Exit(0)
 		}
 	}

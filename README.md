@@ -10,7 +10,7 @@ A local development proxy for all your projects. Like [puma-dev](https://github.
 - Dynamic port allocation - no more port conflicts
 - On-demand startup - services start when you access them
 - Subdomain support - `admin.myapp.test` passes through to your app
-- HTTPS support with locally-trusted certificates (via mkcert)
+- HTTPS support with locally-trusted certificates (automatic CA generation)
 - Web dashboard at `roost-dev.test`
 
 ## Quick Start
