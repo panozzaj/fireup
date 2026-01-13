@@ -13,6 +13,7 @@ type welcomeData struct {
 	ThemeCSS    template.CSS
 	TLD         string
 	ConfigDir   string
+	IconCheck   template.HTML
 }
 
 var welcomeTmpl = template.Must(template.New("welcome").Parse(welcomeHTML))
@@ -24,6 +25,7 @@ func Welcome(tld, configDir, theme string) string {
 		ThemeCSS:    template.CSS(styles.HeadCSS()),
 		TLD:         tld,
 		ConfigDir:   configDir,
+		IconCheck:   template.HTML(IconCheckCurrentColor),
 	}
 
 	var b strings.Builder
@@ -148,11 +150,7 @@ const welcomeHTML = `<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <div class="checkmark">
-            <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        </div>
+        <div class="checkmark">{{.IconCheck}}</div>
         <h1>roost-dev is working!</h1>
         <p class="subtitle">Your local development proxy is ready to use.</p>
 
@@ -176,7 +174,7 @@ const welcomeHTML = `<!DOCTYPE html>
 
         <div class="links">
             <a href="//roost-dev.{{.TLD}}">Open Dashboard</a>
-            <a href="//roost-dev.{{.TLD}}" onclick="event.preventDefault(); navigator.clipboard.writeText('roost-dev serve --help')">Copy help command</a>
+            <a href="//roost-dev.{{.TLD}}" onclick="event.preventDefault(); navigator.clipboard.writeText('roost-dev docs')">Copy docs command</a>
         </div>
     </div>
 </body>
