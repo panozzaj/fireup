@@ -298,14 +298,14 @@ cmd: bin/serve
 	os.WriteFile(tmpDir+"/blog.yml", []byte(yamlContent), 0644)
 
 	yamlContent2 := `
-name: mateams
+name: myapp
 aliases:
   - ma
-  - wt
-root: /tmp/mateams
+  - mp
+root: /tmp/myapp
 cmd: rails server
 `
-	os.WriteFile(tmpDir+"/mateams.yml", []byte(yamlContent2), 0644)
+	os.WriteFile(tmpDir+"/myapp.yml", []byte(yamlContent2), 0644)
 
 	apps.Load()
 
@@ -332,18 +332,18 @@ cmd: rails server
 	t.Run("finds app by multiple aliases", func(t *testing.T) {
 		app1, found1 := s.findApp("ma")
 		if !found1 {
-			t.Fatal("expected to find mateams by alias 'ma'")
+			t.Fatal("expected to find myapp by alias 'ma'")
 		}
-		if app1.Name != "mateams" {
-			t.Errorf("expected app name 'mateams', got %s", app1.Name)
+		if app1.Name != "myapp" {
+			t.Errorf("expected app name 'myapp', got %s", app1.Name)
 		}
 
-		app2, found2 := s.findApp("wt")
+		app2, found2 := s.findApp("mp")
 		if !found2 {
-			t.Fatal("expected to find mateams by alias 'wt'")
+			t.Fatal("expected to find myapp by alias 'mp'")
 		}
-		if app2.Name != "mateams" {
-			t.Errorf("expected app name 'mateams', got %s", app2.Name)
+		if app2.Name != "myapp" {
+			t.Errorf("expected app name 'myapp', got %s", app2.Name)
 		}
 	})
 
@@ -355,35 +355,35 @@ cmd: rails server
 	})
 
 	t.Run("strips subdomain to find app", func(t *testing.T) {
-		// Simulate accessing admin.mateams.test
-		app, found := s.findApp("admin.mateams")
+		// Simulate accessing admin.myapp.test
+		app, found := s.findApp("admin.myapp")
 		if !found {
-			t.Fatal("expected to find mateams via subdomain 'admin.mateams'")
+			t.Fatal("expected to find myapp via subdomain 'admin.myapp'")
 		}
-		if app.Name != "mateams" {
-			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		if app.Name != "myapp" {
+			t.Errorf("expected app name 'myapp', got %s", app.Name)
 		}
 	})
 
 	t.Run("strips subdomain and resolves alias", func(t *testing.T) {
-		// Simulate accessing api.ma.test (ma is alias for mateams)
+		// Simulate accessing api.ma.test (ma is alias for myapp)
 		app, found := s.findApp("api.ma")
 		if !found {
-			t.Fatal("expected to find mateams via subdomain 'api.ma'")
+			t.Fatal("expected to find myapp via subdomain 'api.ma'")
 		}
-		if app.Name != "mateams" {
-			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		if app.Name != "myapp" {
+			t.Errorf("expected app name 'myapp', got %s", app.Name)
 		}
 	})
 
 	t.Run("handles multiple subdomain levels", func(t *testing.T) {
-		// Simulate accessing foo.bar.mateams.test
-		app, found := s.findApp("foo.bar.mateams")
+		// Simulate accessing foo.bar.myapp.test
+		app, found := s.findApp("foo.bar.myapp")
 		if !found {
-			t.Fatal("expected to find mateams via 'foo.bar.mateams'")
+			t.Fatal("expected to find myapp via 'foo.bar.myapp'")
 		}
-		if app.Name != "mateams" {
-			t.Errorf("expected app name 'mateams', got %s", app.Name)
+		if app.Name != "myapp" {
+			t.Errorf("expected app name 'myapp', got %s", app.Name)
 		}
 	})
 }

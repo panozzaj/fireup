@@ -79,7 +79,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try progressively shorter names to support subdomains
-	// e.g., admin.mateams → try "admin.mateams", then "mateams"
+	// e.g., admin.myapp → try "admin.myapp", then "myapp"
 	app, found := s.findApp(name)
 	if !found {
 		// Reload config and try again
@@ -102,7 +102,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // findApp tries to find an app by progressively shorter names
-// e.g., "admin.mateams" → try "admin.mateams", then "mateams"
+// e.g., "admin.myapp" → try "admin.myapp", then "myapp"
 func (s *Server) findApp(name string) (*config.App, bool) {
 	// Try exact match or alias first
 	if app, found := s.apps.GetByNameOrAlias(name); found {

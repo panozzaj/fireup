@@ -14,3 +14,7 @@ pre-commit:
     - name: go-test
       glob: "*.go"
       run: GOPATH="" go test ./...
+
+    - name: docs-line-length
+      glob: "docs/*.txt"
+      run: "awk 'length > 80 { print FILENAME \":\" NR \": line exceeds 80 chars (\" length \" chars)\"; exit 1 }' {staged_files}"

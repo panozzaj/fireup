@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/panozzaj/roost-dev/internal/certs"
 	"github.com/panozzaj/roost-dev/internal/config"
 	"github.com/panozzaj/roost-dev/internal/dns"
@@ -101,6 +103,8 @@ func main() {
 		cmdService(args)
 	case "cert":
 		cmdCert(args)
+	case "docs":
+		cmdDocs(args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\nRun 'roost-dev help' for usage.\n", cmd)
 		os.Exit(1)
@@ -126,6 +130,7 @@ APP MANAGEMENT:
     start <app>       Start an app
     stop <app>        Stop an app
     restart <app>     Restart an app
+    docs              Show documentation
 
 COMPONENT MANAGEMENT:
     ports             Manage port forwarding (install/uninstall)
@@ -1837,6 +1842,77 @@ func checkCertStatus() (string, string) {
 	}
 
 	return "✓", "CA trusted"
+}
+
+// cmdDocs shows documentation
+func cmdDocs(args []string) {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev docs - Show documentation
+
+USAGE:
+    roost-dev docs
+
+Shows configuration and troubleshooting documentation.
+Output is paged if running in a terminal.`)
+			os.Exit(0)
+		}
+	}
+
+	// Try to find docs file in several locations
+	var content []byte
+	var err error
+
+	// 1. Try relative to current directory (for development)
+	content, err = os.ReadFile("docs/roost-dev.txt")
+	if err != nil {
+		// 2. Try relative to executable
+		if exe, exeErr := os.Executable(); exeErr == nil {
+			content, err = os.ReadFile(filepath.Join(filepath.Dir(exe), "docs", "roost-dev.txt"))
+		}
+	}
+	if err != nil {
+		// 3. Try in source location (for go run)
+		homeDir, _ := os.UserHomeDir()
+		content, err = os.ReadFile(filepath.Join(homeDir, "Documents", "dev", "roost-dev", "docs", "roost-dev.txt"))
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: could not find docs/roost-dev.txt\n")
+		os.Exit(1)
+	}
+
+	// If stdout is a terminal, use a pager
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		pager := getPager()
+		if pager != "" {
+			cmd := exec.Command(pager)
+			cmd.Stdin = strings.NewReader(string(content))
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err == nil {
+				return
+			}
+			// Fall through to direct output if pager fails
+		}
+	}
+
+	// Direct output (non-terminal or no pager)
+	os.Stdout.Write(content)
+}
+
+// getPager returns the pager command to use
+func getPager() string {
+	if pager := os.Getenv("PAGER"); pager != "" {
+		return pager
+	}
+	if _, err := exec.LookPath("less"); err == nil {
+		return "less"
+	}
+	if _, err := exec.LookPath("more"); err == nil {
+		return "more"
+	}
+	return ""
 }
 
 // checkServiceStatus returns the status of the background service

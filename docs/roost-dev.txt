@@ -1,0 +1,159 @@
+ROOST-DEV(1)                    User Commands                    ROOST-DEV(1)
+
+NAME
+    roost-dev - local development server manager
+
+DESCRIPTION
+    roost-dev manages local development servers with automatic port
+    allocation, subdomain routing (*.test), and a web dashboard.
+
+    Dashboard: http://roost-dev.test
+
+CONFIGURATION
+    Config files are stored in ~/.config/roost-dev/
+
+    SIMPLE COMMAND (recommended)
+        Create a file with just a command. roost-dev assigns a dynamic port
+        via $PORT, avoiding conflicts with other apps.
+
+        Example: ~/.config/roost-dev/myapp
+            rails server -p $PORT
+
+    FIXED PORT PROXY (not recommended)
+        A file containing just a port number proxies to that port.
+        Fixed ports can conflict; prefer commands with $PORT.
+
+        Example: ~/.config/roost-dev/legacy
+            3000
+
+    STATIC SITE (symlink)
+        Symlink to a directory containing index.html.
+
+        Example:
+            ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+
+    YAML CONFIG
+        For more options, use YAML format (appname.yml).
+
+        Example: ~/.config/roost-dev/myapp.yml
+            description: My Rails App
+            root: ~/projects/myapp
+            cmd: rails server -p $PORT -b 127.0.0.1
+            env:
+              RAILS_ENV: development
+              DATABASE_URL: postgres://localhost/myapp_dev
+
+    MULTI-SERVICE YAML
+        For apps with multiple services (e.g., web + assets).
+
+        Example: ~/.config/roost-dev/myapp.yml
+            description: My Full-Stack App
+            root: ~/projects/myapp
+            services:
+              web:
+                cmd: rails server -p $PORT -b 127.0.0.1
+                default: true
+              assets:
+                cmd: npm run dev
+                env:
+                  PORT: $PORT
+
+        URLs:
+          - http://myapp.test        -> web service (default)
+          - http://assets-myapp.test -> assets service
+
+YAML OPTIONS
+    Root-level options:
+        description   Human-readable app description
+        root          Working directory (supports ~)
+        cmd           Command to run (for single-service apps)
+        env           Environment variables (map)
+        alias         Single alias for the app
+        aliases       List of aliases for the app
+        static        Set to true for static file serving
+
+    Service-level options (under services:):
+        cmd           Command to run
+        env           Environment variables (map)
+        default       If true, this service handles the base domain
+        depends_on    List of services that must start first
+
+ENVIRONMENT VARIABLES
+    roost-dev sets these variables for each process:
+
+    PORT          The allocated port for this service. Your command should
+                  listen on this port.
+
+    FORCE_COLOR   Set to "1" to enable colored output in most tools.
+
+    You can reference $PORT in env values:
+        env:
+          API_URL: http://localhost:$PORT/api
+
+URLS AND ROUTING
+    Apps are accessible at http://<appname>.test
+
+    For multi-service apps:
+        http://<appname>.test              -> default service
+        http://<service>-<appname>.test    -> specific service
+
+    Examples:
+        http://blog.test                   -> blog app
+        http://myapp.test                  -> myapp's default service
+        http://api-myapp.test              -> myapp's api service
+
+COMMANDS
+    roost-dev serve           Start the server
+    roost-dev list            List apps and status
+    roost-dev start <app>     Start an app
+    roost-dev stop <app>      Stop an app
+    roost-dev restart <app>   Restart an app
+    roost-dev status          Show component status
+    roost-dev setup           Interactive setup wizard
+    roost-dev docs            Show this documentation
+
+TROUBLESHOOTING
+    "Address already in use"
+        Another process is using the port. roost-dev allocates ports in the
+        50000-60000 range. Check for orphaned processes:
+            lsof -i :50000-60000 | grep LISTEN
+
+    App won't start
+        1. Check the app's logs in the dashboard
+        2. Verify the command works manually:
+               cd /path/to/app && PORT=3000 <your-command>
+        3. Ensure dependencies (node, ruby, etc.) are available
+
+    "Connection refused" in browser
+        1. Check if roost-dev is running: roost-dev status
+        2. Check if port forwarding is set up: roost-dev ports install
+        3. Verify DNS: ping myapp.test (should resolve to 127.0.0.1)
+
+    HTTPS not working
+        1. Run: roost-dev cert install
+        2. Restart your browser completely (quit and reopen)
+        3. Check certificate status: roost-dev cert status
+
+    Changes to config not taking effect
+        roost-dev watches config files and reloads automatically.
+        If not working, restart the app: roost-dev restart <app>
+
+    Environment not loading (rbenv, nvm, etc.)
+        roost-dev runs commands in a login shell. Ensure your shell config
+        (~/.zshrc or ~/.bashrc) sets up your environment correctly.
+
+    Rails PID file conflicts
+        roost-dev automatically removes stale tmp/pids/server.pid files
+        before starting Rails apps.
+
+FILES
+    ~/.config/roost-dev/           App configuration directory
+    ~/.config/roost-dev/config.json   Global settings (TLD, etc.)
+    ~/.config/roost-dev/certs/     HTTPS certificates
+    ~/Library/LaunchAgents/com.roost-dev.plist   Background service
+    ~/Library/Logs/roost-dev/      Service logs
+
+SEE ALSO
+    Dashboard: http://roost-dev.test
+    Source: https://github.com/panozzaj/roost-dev
+
