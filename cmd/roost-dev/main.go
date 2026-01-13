@@ -83,10 +83,20 @@ func main() {
 		cmdAppControl("stop", args)
 	case "restart":
 		cmdAppControl("restart", args)
+	case "setup":
+		cmdSetup(args)
+	case "teardown":
+		cmdTeardown(args)
+	case "status":
+		cmdStatus(args)
+	case "ports":
+		cmdPorts(args)
 	case "install":
-		cmdInstall(args)
+		// Legacy: redirect to ports install
+		cmdPortsInstall(args)
 	case "uninstall":
-		cmdUninstall(args)
+		// Legacy: redirect to ports uninstall
+		cmdPortsUninstall(args)
 	case "service":
 		cmdService(args)
 	case "cert":
@@ -105,24 +115,27 @@ roost-dev - Local development proxy for all your projects
 USAGE:
     roost-dev <command> [options]
 
-COMMANDS:
+GETTING STARTED:
+    setup             Interactive setup wizard (ports + cert + service)
+    teardown          Remove all roost-dev configuration
+    status            Show status of all components
+
+APP MANAGEMENT:
     serve             Start the roost-dev server
     list, ls          List configured apps and their status
     start <app>       Start an app
     stop <app>        Stop an app
     restart <app>     Restart an app
-    install           Setup port forwarding (requires sudo)
-    uninstall         Remove port forwarding config (requires sudo)
-    service           Manage roost-dev as a background service
-    cert              Manage HTTPS certificates
-    help              Show this help
-    version           Show version
+
+COMPONENT MANAGEMENT:
+    ports             Manage port forwarding (install/uninstall)
+    cert              Manage HTTPS certificates (install/uninstall)
+    service           Manage background service (install/uninstall)
 
 Run 'roost-dev <command> --help' for command-specific options.
 
 QUICK START:
-    sudo roost-dev install        # One-time setup
-    roost-dev serve               # Start the server
+    roost-dev setup               # Interactive setup wizard
     # Then visit http://roost-dev.test`)
 }
 
@@ -353,9 +366,9 @@ Requires the roost-dev server to be running.
 	}
 }
 
-// cmdInstall handles the 'install' command
-func cmdInstall(args []string) {
-	fs := flag.NewFlagSet("install", flag.ExitOnError)
+// cmdPortsInstall handles the 'ports install' command (also legacy 'install')
+func cmdPortsInstall(args []string) {
+	fs := flag.NewFlagSet("ports install", flag.ExitOnError)
 
 	homeDir, _ := os.UserHomeDir()
 	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
@@ -369,10 +382,10 @@ func cmdInstall(args []string) {
 	fs.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev install - Setup port forwarding for roost-dev
+		fmt.Println(`roost-dev ports install - Setup port forwarding
 
 USAGE:
-    sudo roost-dev install [options]
+    roost-dev ports install [options]
 
 OPTIONS:`)
 		fs.PrintDefaults()
@@ -386,9 +399,11 @@ DESCRIPTION:
       - Port 80  → 9280 (HTTP)
       - Port 443 → 9443 (HTTPS)
 
+    Requires sudo for system configuration.
+
 EXAMPLES:
-    sudo roost-dev install              # Setup for .test (default)
-    sudo roost-dev install --tld dev    # Setup for .dev TLD`)
+    roost-dev ports install              # Setup for .test (default)
+    roost-dev ports install --tld dev    # Setup for .dev TLD`)
 	}
 
 	// Check for help before parsing
@@ -401,23 +416,23 @@ EXAMPLES:
 
 	fs.Parse(args)
 
-	if err := runSetup(configDir, 9280, 9053, tld); err != nil {
-		log.Fatalf("Install failed: %v", err)
+	if err := runPortsInstall(configDir, tld); err != nil {
+		log.Fatalf("Port forwarding install failed: %v", err)
 	}
 }
 
-// cmdUninstall handles the 'uninstall' command
-func cmdUninstall(args []string) {
-	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+// cmdPortsUninstall handles the 'ports uninstall' command (also legacy 'uninstall')
+func cmdPortsUninstall(args []string) {
+	fs := flag.NewFlagSet("ports uninstall", flag.ExitOnError)
 
 	var tld string
 	fs.StringVar(&tld, "tld", "test", "Top-level domain to remove")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev uninstall - Remove roost-dev port forwarding config
+		fmt.Println(`roost-dev ports uninstall - Remove port forwarding config
 
 USAGE:
-    sudo roost-dev uninstall [options]
+    roost-dev ports uninstall [options]
 
 OPTIONS:`)
 		fs.PrintDefaults()
@@ -427,9 +442,11 @@ DESCRIPTION:
     Does not modify /etc/pf.conf - you may want to manually remove
     the roost-dev lines or restore from the backup.
 
+    Requires sudo for system configuration.
+
 EXAMPLES:
-    sudo roost-dev uninstall              # Remove .test config (default)
-    sudo roost-dev uninstall --tld dev    # Remove .dev TLD config`)
+    roost-dev ports uninstall              # Remove .test config (default)
+    roost-dev ports uninstall --tld dev    # Remove .dev TLD config`)
 	}
 
 	// Check for help before parsing
@@ -442,9 +459,161 @@ EXAMPLES:
 
 	fs.Parse(args)
 
-	if err := runCleanup(tld); err != nil {
-		log.Fatalf("Uninstall failed: %v", err)
+	if err := runPortsUninstall(tld); err != nil {
+		log.Fatalf("Port forwarding uninstall failed: %v", err)
 	}
+}
+
+// cmdPorts handles the 'ports' command for managing port forwarding
+func cmdPorts(args []string) {
+	if len(args) == 0 {
+		printPortsUsage()
+		os.Exit(0)
+	}
+
+	subcmd := args[0]
+	subargs := args[1:]
+
+	switch subcmd {
+	case "install":
+		cmdPortsInstall(subargs)
+	case "uninstall":
+		cmdPortsUninstall(subargs)
+	case "-h", "--help", "help":
+		printPortsUsage()
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown ports command: %s\n\n", subcmd)
+		printPortsUsage()
+		os.Exit(1)
+	}
+}
+
+func printPortsUsage() {
+	fmt.Println(`roost-dev ports - Manage port forwarding
+
+USAGE:
+    roost-dev ports <command>
+
+COMMANDS:
+    install     Setup port forwarding (80→9280, 443→9443)
+    uninstall   Remove port forwarding configuration
+
+Use 'roost-dev status' to check port forwarding status.
+
+DESCRIPTION:
+    Manages macOS pf (packet filter) rules that forward ports 80 and 443
+    to roost-dev, allowing you to access apps at http://myapp.test without
+    specifying a port number.`)
+}
+
+// cmdSetup is the interactive setup wizard
+func cmdSetup(args []string) {
+	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+
+	homeDir, _ := os.UserHomeDir()
+	defaultConfigDir := filepath.Join(homeDir, ".config", "roost-dev")
+
+	var (
+		tld       string
+		configDir string
+	)
+
+	fs.StringVar(&tld, "tld", "test", "Top-level domain to configure")
+	fs.StringVar(&configDir, "dir", defaultConfigDir, "Configuration directory")
+
+	fs.Usage = func() {
+		fmt.Println(`roost-dev setup - Interactive setup wizard
+
+USAGE:
+    roost-dev setup [options]
+
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+DESCRIPTION:
+    Sets up roost-dev with all recommended components:
+
+    1. Port forwarding - Forward ports 80/443 to roost-dev
+       Lets you use http://myapp.test instead of http://localhost:9280
+
+    2. HTTPS certificates - Generate a trusted local CA
+       Enables https://myapp.test with no browser warnings
+
+    3. Background service - Start roost-dev automatically on login
+       roost-dev runs in the background so your apps are always ready
+
+    The wizard explains each step before asking for your password.
+    You can also run each step individually with the ports/cert/service commands.`)
+	}
+
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
+			os.Exit(0)
+		}
+	}
+
+	fs.Parse(args)
+
+	runSetupWizard(configDir, tld)
+}
+
+// cmdTeardown removes all roost-dev configuration
+func cmdTeardown(args []string) {
+	fs := flag.NewFlagSet("teardown", flag.ExitOnError)
+
+	var tld string
+	fs.StringVar(&tld, "tld", "test", "Top-level domain to remove")
+
+	fs.Usage = func() {
+		fmt.Println(`roost-dev teardown - Remove all roost-dev configuration
+
+USAGE:
+    roost-dev teardown [options]
+
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+DESCRIPTION:
+    Removes all roost-dev components:
+    - Stops and removes the background service
+    - Removes HTTPS certificates and CA from trust store
+    - Removes port forwarding rules
+
+    The wizard explains each step and asks for confirmation.`)
+	}
+
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
+			os.Exit(0)
+		}
+	}
+
+	fs.Parse(args)
+
+	runTeardownWizard(tld)
+}
+
+// cmdStatus shows overall status of all components
+func cmdStatus(args []string) {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev status - Show status of all components
+
+USAGE:
+    roost-dev status
+
+Shows the status of:
+- Port forwarding (ports 80/443)
+- HTTPS certificates
+- Background service`)
+			os.Exit(0)
+		}
+	}
+
+	runOverallStatus()
 }
 
 // cmdService handles the 'service' command for managing roost-dev as a background service
@@ -1052,18 +1221,34 @@ func checkInstallConflicts(tld string) error {
 	return nil
 }
 
-func runSetup(configDir string, targetPort, dnsPort int, tld string) error {
-	fmt.Println("Installing roost-dev...")
-
+func runPortsInstall(configDir, tld string) error {
 	// Check for conflicts first (before requiring sudo)
 	if err := checkInstallConflicts(tld); err != nil {
 		return err
 	}
 
-	// Check if running as root
+	// If not running as root, re-invoke with sudo
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("install requires root privileges. Run with: sudo roost-dev install")
+		fmt.Println("Port forwarding requires administrator privileges.")
+		fmt.Println("You'll be prompted for your password.")
+		fmt.Println()
+
+		// Find our binary
+		exe, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("finding executable: %w", err)
+		}
+
+		// Re-invoke with sudo
+		args := []string{exe, "ports", "install", "--tld", tld, "--dir", configDir}
+		cmd := exec.Command("sudo", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		return cmd.Run()
 	}
+
+	fmt.Println("Installing port forwarding...")
 
 	// Save TLD to config so we don't need --tld flag every time
 	if err := saveGlobalConfig(configDir, &GlobalConfig{TLD: tld}); err != nil {
@@ -1176,7 +1361,7 @@ rdr pass on lo0 inet6 proto tcp from any to any port 443 -> ::1 port 9443
 		}
 
 		resolverPath := fmt.Sprintf("%s/%s", resolverDir, tld)
-		resolverContent := fmt.Sprintf("# Generated by roost-dev\nnameserver 127.0.0.1\nport %d\n", dnsPort)
+		resolverContent := "# Generated by roost-dev\nnameserver 127.0.0.1\nport 9053\n"
 		fmt.Printf("Creating %s...\n", resolverPath)
 		if err := os.WriteFile(resolverPath, []byte(resolverContent), 0644); err != nil {
 			return fmt.Errorf("writing resolver file: %w", err)
@@ -1184,20 +1369,10 @@ rdr pass on lo0 inet6 proto tcp from any to any port 443 -> ::1 port 9443
 	}
 
 	fmt.Println()
-	fmt.Println("Setup complete!")
-	fmt.Println()
-	fmt.Println("Port forwarding enabled:")
+	fmt.Println("Port forwarding installed!")
 	fmt.Println("  - Port 80  → 9280 (HTTP)")
 	fmt.Println("  - Port 443 → 9443 (HTTPS)")
-	fmt.Printf("TLD '%s' saved to config.\n", tld)
-	fmt.Println()
-	fmt.Println("You can now run roost-dev without sudo:")
-	fmt.Println()
-	fmt.Println("    roost-dev serve")
-	fmt.Println()
-	fmt.Printf("Then access your apps at http://appname.%s\n", tld)
-	fmt.Println()
-	fmt.Println("For HTTPS support, run: roost-dev cert install")
+	fmt.Printf("  - TLD: .%s\n", tld)
 	if needsUpdate {
 		fmt.Println()
 		fmt.Println("Note: /etc/pf.conf was modified. Backup saved to /etc/pf.conf.roost-dev-backup")
@@ -1397,13 +1572,29 @@ func listConfigFiles(configDir, tld string) error {
 	return nil
 }
 
-func runCleanup(tld string) error {
-	fmt.Println("Uninstalling roost-dev configuration...")
-
-	// Check if running as root
+func runPortsUninstall(tld string) error {
+	// If not running as root, re-invoke with sudo
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("uninstall requires root privileges. Run with: sudo roost-dev uninstall")
+		fmt.Println("Removing port forwarding requires administrator privileges.")
+		fmt.Println("You'll be prompted for your password.")
+		fmt.Println()
+
+		// Find our binary
+		exe, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("finding executable: %w", err)
+		}
+
+		// Re-invoke with sudo
+		args := []string{exe, "ports", "uninstall", "--tld", tld}
+		cmd := exec.Command("sudo", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		return cmd.Run()
 	}
+
+	fmt.Println("Removing port forwarding...")
 
 	// Flush our anchor
 	fmt.Println("Flushing roost-dev anchor...")
@@ -1436,11 +1627,229 @@ func runCleanup(tld string) error {
 	}
 
 	fmt.Println()
-	fmt.Println("Cleanup complete!")
+	fmt.Println("Port forwarding removed!")
 	fmt.Println()
-	fmt.Println("Note: /etc/pf.conf was not modified. To fully remove roost-dev:")
-	fmt.Println("  1. Remove the roost-dev anchor lines from /etc/pf.conf")
-	fmt.Println("  2. Or restore from backup: sudo cp /etc/pf.conf.roost-dev-backup /etc/pf.conf")
+	fmt.Println("Note: /etc/pf.conf was not modified. To fully remove:")
+	fmt.Println("  sudo cp /etc/pf.conf.roost-dev-backup /etc/pf.conf")
 
 	return nil
+}
+
+// runSetupWizard is the interactive setup wizard
+func runSetupWizard(configDir, tld string) {
+	printLogo()
+	fmt.Println("Welcome to roost-dev setup!")
+	fmt.Println()
+	fmt.Println("This wizard will configure roost-dev with three components:")
+	fmt.Println()
+	fmt.Println("  1. PORT FORWARDING")
+	fmt.Println("     Redirects ports 80 and 443 to roost-dev, so you can access")
+	fmt.Println("     your apps at http://myapp.test instead of http://localhost:9280")
+	fmt.Println("     Requires: sudo")
+	fmt.Println("       - Writes to /etc/pf.anchors/roost-dev (firewall rules)")
+	fmt.Printf("       - Writes to /etc/resolver/%s (DNS resolution)\n", tld)
+	fmt.Println()
+	fmt.Println("  2. HTTPS CERTIFICATES")
+	fmt.Println("     Generates a local Certificate Authority so https://myapp.test")
+	fmt.Println("     works in your browser with no warnings.")
+	fmt.Println("     Requires: sudo")
+	fmt.Println("       - Adds CA to /Library/Keychains/System.keychain")
+	fmt.Println()
+	fmt.Println("  3. BACKGROUND SERVICE")
+	fmt.Println("     Installs a LaunchAgent so roost-dev starts automatically")
+	fmt.Println("     when you log in. Your apps are always ready!")
+	fmt.Println("     Requires: nothing")
+	fmt.Println("       - Writes to ~/Library/LaunchAgents/com.roost-dev.plist")
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+	fmt.Println()
+
+	// Step 1: Port forwarding
+	fmt.Println("Step 1/3: Port Forwarding")
+	fmt.Println()
+	if err := runPortsInstall(configDir, tld); err != nil {
+		fmt.Printf("\n⚠ Port forwarding failed: %v\n", err)
+		fmt.Println("You can retry later with: roost-dev ports install")
+		fmt.Println()
+	} else {
+		fmt.Println()
+	}
+
+	// Step 2: Certificates
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+	fmt.Println()
+	fmt.Println("Step 2/3: HTTPS Certificates")
+	fmt.Println()
+	if err := runCertInstall(configDir, tld); err != nil {
+		fmt.Printf("\n⚠ Certificate setup failed: %v\n", err)
+		fmt.Println("You can retry later with: roost-dev cert install")
+		fmt.Println()
+	} else {
+		fmt.Println()
+	}
+
+	// Step 3: Background service
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+	fmt.Println()
+	fmt.Println("Step 3/3: Background Service")
+	fmt.Println()
+	if err := runServiceInstall(); err != nil {
+		fmt.Printf("\n⚠ Service install failed: %v\n", err)
+		fmt.Println("You can retry later with: roost-dev service install")
+		fmt.Println()
+	} else {
+		fmt.Println()
+	}
+
+	// Final summary
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+	fmt.Println()
+	fmt.Println("Setup complete! roost-dev is ready to use.")
+	fmt.Println()
+	fmt.Printf("  Dashboard:  http://roost-dev.%s\n", tld)
+	fmt.Printf("  Dashboard:  https://roost-dev.%s (HTTPS)\n", tld)
+	fmt.Println()
+	fmt.Println("Create app configs in ~/.config/roost-dev/")
+	fmt.Println("Run 'roost-dev status' to check component status.")
+	fmt.Println()
+	fmt.Println("Note: Restart your browser for HTTPS to work (quit fully and reopen).")
+}
+
+// runTeardownWizard removes all roost-dev configuration
+func runTeardownWizard(tld string) {
+	fmt.Println("Removing all roost-dev components...")
+	fmt.Println()
+
+	// Step 1: Stop and remove service
+	fmt.Println("Step 1/3: Removing background service...")
+	if err := runServiceUninstall(); err != nil {
+		fmt.Printf("  ⚠ Service removal failed: %v\n", err)
+	} else {
+		fmt.Println("  ✓ Service removed")
+	}
+	fmt.Println()
+
+	// Step 2: Remove certificates
+	fmt.Println("Step 2/3: Removing certificates...")
+	if err := runCertUninstall(); err != nil {
+		fmt.Printf("  ⚠ Certificate removal failed: %v\n", err)
+	} else {
+		fmt.Println("  ✓ Certificates removed")
+	}
+	fmt.Println()
+
+	// Step 3: Remove port forwarding
+	fmt.Println("Step 3/3: Removing port forwarding...")
+	if err := runPortsUninstall(tld); err != nil {
+		fmt.Printf("  ⚠ Port forwarding removal failed: %v\n", err)
+	} else {
+		fmt.Println("  ✓ Port forwarding removed")
+	}
+	fmt.Println()
+
+	fmt.Println("Teardown complete!")
+	fmt.Println()
+	fmt.Println("roost-dev configuration has been removed.")
+	fmt.Println("To reinstall, run: roost-dev setup")
+}
+
+// runOverallStatus shows status of all components
+func runOverallStatus() {
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "roost-dev")
+
+	// Load TLD from config
+	globalCfg, _ := loadGlobalConfig(configDir)
+	tld := "test"
+	if globalCfg != nil && globalCfg.TLD != "" {
+		tld = globalCfg.TLD
+	}
+
+	fmt.Println()
+	fmt.Println("roost-dev status")
+	fmt.Println("────────────────────────────────────────────────")
+
+	// Check ports
+	portsStatus, portsDetail := checkPortsStatus()
+	fmt.Printf("  Ports     %s  %s\n", portsStatus, portsDetail)
+
+	// Check cert
+	certStatus, certDetail := checkCertStatus()
+	fmt.Printf("  Cert      %s  %s\n", certStatus, certDetail)
+
+	// Check service
+	serviceStatus, serviceDetail := checkServiceStatus()
+	fmt.Printf("  Service   %s  %s\n", serviceStatus, serviceDetail)
+
+	fmt.Println("────────────────────────────────────────────────")
+	fmt.Printf("  Dashboard: http://roost-dev.%s\n", tld)
+	fmt.Println()
+}
+
+// checkPortsStatus returns the status of port forwarding
+func checkPortsStatus() (string, string) {
+	// Check if anchor file exists
+	if _, err := os.Stat(pfAnchorPath); os.IsNotExist(err) {
+		return "✗", "not installed"
+	}
+
+	// Check if pf rules are loaded by checking if our anchor has rules
+	cmd := exec.Command("/sbin/pfctl", "-a", "roost-dev", "-sr")
+	output, err := cmd.Output()
+	if err != nil || len(output) == 0 {
+		return "✗", "installed but not active"
+	}
+
+	return "✓", "80→9280, 443→9443"
+}
+
+// checkCertStatus returns the status of HTTPS certificates
+func checkCertStatus() (string, string) {
+	certsDir := getCertsDir()
+	caPath := filepath.Join(certsDir, "ca.pem")
+
+	if _, err := os.Stat(caPath); os.IsNotExist(err) {
+		return "✗", "not installed"
+	}
+
+	// Check if CA is trusted (simplified check)
+	cmd := exec.Command("security", "find-certificate", "-c", "roost-dev Local CA", "/Library/Keychains/System.keychain")
+	if err := cmd.Run(); err != nil {
+		return "⚠", "CA exists but may not be trusted"
+	}
+
+	return "✓", "CA trusted"
+}
+
+// checkServiceStatus returns the status of the background service
+func checkServiceStatus() (string, string) {
+	plistPath := getUserLaunchAgentPath()
+
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		return "✗", "not installed"
+	}
+
+	// Check if service is running using launchctl list (pipe format)
+	// Output format: "PID\tStatus\tLabel" or "-\tStatus\tLabel" if not running
+	cmd := exec.Command("/bin/launchctl", "list")
+	output, err := cmd.Output()
+	if err != nil {
+		return "⚠", "installed (status unknown)"
+	}
+
+	// Look for our service in the list
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.Contains(line, "com.roost-dev") {
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				pid := parts[0]
+				if pid != "-" {
+					return "✓", fmt.Sprintf("running (PID %s)", pid)
+				}
+				return "⚠", "installed but not running"
+			}
+		}
+	}
+
+	return "⚠", "installed but not loaded"
 }
