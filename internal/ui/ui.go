@@ -215,6 +215,14 @@ const dashboardHTML = `<!DOCTYPE html>
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.5; transform: scale(1.2); }
         }
+        .static-badge {
+            width: 14px;
+            height: 16px;
+        }
+        .static-badge svg {
+            width: 100%;
+            height: 100%;
+        }
         .app-description {
             font-size: 13px;
             color: var(--text-muted);
@@ -606,21 +614,25 @@ echo "npm run dev" > ~/.config/roost-dev/myapp
                 ` + "`" + `;
             }
 
+            const statusIndicator = app.type === 'static'
+                ? ` + "`" + `<div class="static-badge" title="Static files"><svg viewBox="0 0 512 512"><path fill="#e44d26" d="M108.4 0h23v22.8h21.2V0h23v69h-23V46h-21.2v23h-23M206 23h-20.3V0h63.7v23H229v46h-23M259.5 0h24.1l14.8 24.3L313.2 0h24.1v69h-23V34.8l-16.1 24.8-16.1-24.8v34.2h-22.6M348.7 0h23v46.2h32.6v22.8h-55.6"/><path fill="#f06529" d="M107.6 471l-33-370.4h362.8l-33 370.2L256.2 512"/><path fill="#e44d26" d="M256 480.5V131h148.3L376 447"/><path fill="#ebebeb" d="M142 176.3h114v45.4h-64.2l4.2 46.5h60v45.3H154.4M156.4 336.3H202l3.2 36.3 50.8 13.6v47.4l-93.2-26"/><path fill="#fff" d="M369.6 176.3H256v45.4h109.6M361.3 268.2H256v45.4h56l-5.3 59-50.7 13.6v47.2l93-25.8"/></svg></div>` + "`" + `
+                : ` + "`" + `<div class="status-dot-wrapper">
+                        <div class="status-dot ${statusClass}" onclick="event.stopPropagation(); handleDotClick('${app.name}', event)"></div>
+                        <div class="status-menu" id="menu-${app.name}-active">
+                            <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
+                            <button class="danger" onclick="event.stopPropagation(); doStop('${app.name}')">Stop</button>
+                        </div>
+                        <div class="status-menu" id="menu-${app.name}-failed">
+                            <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
+                            <button onclick="event.stopPropagation(); doClear('${app.name}')">Clear</button>
+                        </div>
+                    </div>` + "`" + `;
+
             return ` + "`" + `
                 <div class="app" data-name="${app.name}">
                     <div class="app-header" onclick="toggleLogs('${app.name}')">
                         <div class="app-info">
-                            <div class="status-dot-wrapper">
-                                <div class="status-dot ${statusClass}" onclick="event.stopPropagation(); handleDotClick('${app.name}', event)"></div>
-                                <div class="status-menu" id="menu-${app.name}-active">
-                                    <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
-                                    <button class="danger" onclick="event.stopPropagation(); doStop('${app.name}')">Stop</button>
-                                </div>
-                                <div class="status-menu" id="menu-${app.name}-failed">
-                                    <button onclick="event.stopPropagation(); doRestart('${app.name}', event)">Restart</button>
-                                    <button onclick="event.stopPropagation(); doClear('${app.name}')">Clear</button>
-                                </div>
-                            </div>
+                            ${statusIndicator}
                             <span class="app-name">${displayName}</span>
                             ${app.aliases && app.aliases.length ? ` + "`" + `<span class="app-aliases">aka ${app.aliases.join(', ')}</span>` + "`" + ` : ''}
                         </div>

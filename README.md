@@ -46,8 +46,18 @@ Your command receives the port via `$PORT` environment variable. This is the pre
 
 ```bash
 ln -s ~/projects/my-site ~/.config/roost-dev/mysite
-# Serves files from the directory (must contain index.html)
+# Serves files from the directory
 ```
+
+Or in YAML:
+
+```yaml
+# ~/.config/roost-dev/mysite.yml
+root: ~/projects/my-site
+static: true
+```
+
+Static sites show an HTML5 icon on the dashboard instead of a status dot (since they're always available).
 
 ### Fixed port proxy
 
