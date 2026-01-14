@@ -1394,6 +1394,9 @@ function applyFilter() {
         if (aliasesEl) {
             aliasesEl.innerHTML = highlightMatch(aliasesEl.textContent, currentFilter)
         }
+        urlEls.forEach(function (urlEl) {
+            urlEl.innerHTML = highlightMatch(urlEl.textContent, currentFilter)
+        })
         serviceNames.forEach(function (svc) {
             svc.innerHTML = highlightMatch(svc.textContent, currentFilter)
         })
