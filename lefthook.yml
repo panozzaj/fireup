@@ -1,37 +1,41 @@
 # Quiet by default, use LEFTHOOK_VERBOSE=1 for full output
 output:
-  - summary
-  - failure
+    - summary
+    - failure
 
 pre-commit:
-  parallel: true
-  jobs:
-    - name: gofmt
-      glob: "*.go"
-      run: gofmt -l -w {staged_files}
-      stage_fixed: true
+    parallel: true
+    jobs:
+        - name: gofmt
+          glob: '*.go'
+          run: gofmt -l -w {staged_files}
+          stage_fixed: true
 
-    - name: go-test
-      glob: "*.go"
-      run: GOPATH="" go test ./...
+        - name: go-test
+          glob: '*.go'
+          run: GOPATH="" go test ./...
 
-    - name: docs-line-length
-      glob: "docs/*.txt"
-      run: "awk 'length > 80 { print FILENAME \":\" NR \": line exceeds 80 chars (\" length \" chars)\"; exit 1 }' {staged_files}"
+        - name: docs-line-length
+          glob: 'docs/*.txt'
+          run: 'awk ''length > 80 { print FILENAME ":" NR ": line exceeds 80 chars (" length " chars)"; exit 1 }'' {staged_files}'
 
-    - name: no-inline-svg
-      glob: "internal/**/*.js"
-      exclude: "**/icons_test_page*"
-      run: "! grep -n '<svg' {staged_files} || (echo 'Error: Use ICONS.* instead of inline SVGs' && exit 1)"
+        - name: no-inline-svg
+          glob: 'internal/**/*.js'
+          exclude: '**/icons_test_page*'
+          run: "! grep -n '<svg' {staged_files} || (echo 'Error: Use ICONS.* instead of inline SVGs' && exit 1)"
 
-    - name: eslint
-      glob: "internal/**/*.js"
-      run: npx eslint {staged_files}
+        - name: eslint
+          glob: 'internal/**/*.js'
+          run: npx eslint {staged_files}
 
-    - name: stylelint
-      glob: "internal/**/*.css"
-      run: npx stylelint {staged_files}
+        - name: stylelint
+          glob: 'internal/**/*.css'
+          run: npx stylelint {staged_files}
 
-    - name: prettier
-      glob: "internal/**/*.{js,css}"
-      run: npx prettier --check {staged_files}
+        - name: prettier
+          glob: 'internal/**/*.{js,css}'
+          run: npx prettier --check {staged_files}
+
+        - name: js-tests
+          glob: 'internal/**/*.test.js'
+          run: node {staged_files}
