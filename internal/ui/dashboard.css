@@ -346,3 +346,71 @@ h1 {
     color: #7c3aed;
     text-align: left;
 }
+
+/* Filter bar (in header) */
+.filter-bar {
+    flex: 1;
+    max-width: 300px;
+    margin: 0 24px;
+    position: relative;
+}
+#filter-input {
+    width: 100%;
+    padding: 6px 12px;
+    padding-right: 32px;
+    background: var(--bg-secondary);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    outline: none;
+    transition:
+        border-color 0.2s,
+        background 0.2s;
+}
+#filter-input:focus {
+    border-color: var(--accent-blue);
+    background: var(--bg-primary);
+}
+#filter-input::placeholder {
+    color: var(--text-muted);
+}
+.filter-shortcut {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+.filter-shortcut kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.filter-bar.has-value .filter-shortcut,
+#filter-input:focus ~ .filter-shortcut {
+    opacity: 0;
+}
+
+/* Filtered app states */
+#apps {
+    display: flex;
+    flex-direction: column;
+}
+.app.filter-match {
+    order: -1;
+}
+.app.filter-mismatch {
+    opacity: 0.4;
+}
+.app .filter-highlight {
+    background: #fde047;
+    border-radius: 2px;
+    color: #000;
+}

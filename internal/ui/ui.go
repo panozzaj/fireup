@@ -70,6 +70,10 @@ const dashboardHTML = `<!DOCTYPE html>
     <div class="container">
         <header>
             <h1>roost-dev</h1>
+            <div class="filter-bar" id="filter-bar">
+                <input type="text" id="filter-input" placeholder="Filter..." autocomplete="off">
+                <span class="filter-shortcut" id="filter-shortcut"><kbd>/</kbd></span>
+            </div>
             <div class="header-actions">
                 <span class="connection-status">
                     <span class="connection-dot" id="connection-dot"></span>

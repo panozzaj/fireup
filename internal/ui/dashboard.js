@@ -709,6 +709,11 @@ function updateApps(newApps) {
     })
 
     currentApps = newApps
+
+    // Re-apply filter after DOM update
+    if (typeof applyFilter === 'function') {
+        applyFilter()
+    }
 }
 
 function renderApp(app) {
@@ -1289,6 +1294,159 @@ setInterval(function () {
         fetchLogs(expandedLogs)
     }
 }, 2000)
+
+// Filter functionality
+var filterInput = document.getElementById('filter-input')
+var filterBar = document.getElementById('filter-bar')
+var currentFilter = ''
+
+// Focus filter on '/' key
+document.addEventListener('keydown', function (e) {
+    // Ignore if already in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        // Handle Escape to clear and blur
+        if (e.key === 'Escape') {
+            filterInput.value = ''
+            currentFilter = ''
+            filterInput.blur()
+            filterBar.classList.remove('has-value')
+            applyFilter()
+        }
+        return
+    }
+    if (e.key === '/') {
+        e.preventDefault()
+        filterInput.focus()
+    }
+})
+
+filterInput.addEventListener('input', function () {
+    currentFilter = filterInput.value.toLowerCase().trim()
+    filterBar.classList.toggle('has-value', currentFilter.length > 0)
+    applyFilter()
+})
+
+filterInput.addEventListener('focus', function () {
+    filterBar.classList.add('active')
+})
+
+filterInput.addEventListener('blur', function () {
+    if (!currentFilter) {
+        filterBar.classList.remove('active')
+    }
+})
+
+// Normalize text for matching: lowercase, treat spaces/underscores/dashes as same
+function normalizeForSearch(text) {
+    return text.toLowerCase().replace(/[-_ ]/g, '')
+}
+
+// Check if normalized text contains normalized query
+function matchesFilter(text, normalizedQuery) {
+    if (!normalizedQuery) return true
+    return normalizeForSearch(text).indexOf(normalizedQuery) !== -1
+}
+
+function applyFilter() {
+    var normalizedQuery = normalizeForSearch(currentFilter)
+    var apps = document.querySelectorAll('.app')
+
+    apps.forEach(function (appEl) {
+        // Gather all searchable text from visible elements
+        var name = appEl.getAttribute('data-name') || ''
+        var appNameEl = appEl.querySelector('.app-name')
+        var aliasesEl = appEl.querySelector('.app-aliases')
+        var urlEls = appEl.querySelectorAll('.app-url')
+        var serviceNames = appEl.querySelectorAll('.service-name')
+
+        var displayName = appNameEl ? appNameEl.textContent : ''
+        var aliases = aliasesEl ? aliasesEl.textContent : ''
+
+        // Check all fields for match
+        var isMatch =
+            !currentFilter ||
+            matchesFilter(name, normalizedQuery) ||
+            matchesFilter(displayName, normalizedQuery) ||
+            matchesFilter(aliases, normalizedQuery)
+
+        // Check URLs
+        urlEls.forEach(function (urlEl) {
+            if (matchesFilter(urlEl.textContent, normalizedQuery)) {
+                isMatch = true
+            }
+        })
+
+        // Check service names
+        serviceNames.forEach(function (svc) {
+            if (matchesFilter(svc.textContent, normalizedQuery)) {
+                isMatch = true
+            }
+        })
+
+        // Update classes
+        appEl.classList.toggle('filter-match', isMatch && currentFilter)
+        appEl.classList.toggle('filter-mismatch', !isMatch && currentFilter)
+
+        // Highlight matching text in visible elements
+        if (appNameEl) {
+            appNameEl.innerHTML = highlightMatch(displayName, currentFilter)
+        }
+        if (aliasesEl) {
+            aliasesEl.innerHTML = highlightMatch(aliasesEl.textContent, currentFilter)
+        }
+        serviceNames.forEach(function (svc) {
+            svc.innerHTML = highlightMatch(svc.textContent, currentFilter)
+        })
+    })
+}
+
+function highlightMatch(text, query) {
+    if (!query) return escapeHtml(text)
+    // Find match using normalized comparison but highlight original positions
+    var normalizedText = normalizeForSearch(text)
+    var normalizedQuery = normalizeForSearch(query)
+    var idx = normalizedText.indexOf(normalizedQuery)
+    if (idx === -1) return escapeHtml(text)
+
+    // Map normalized index back to original text position
+    var origIdx = 0
+    var normIdx = 0
+    while (normIdx < idx && origIdx < text.length) {
+        if (!/[-_ ]/.test(text[origIdx])) {
+            normIdx++
+        }
+        origIdx++
+    }
+
+    // Skip leading separators at match start
+    while (origIdx < text.length && /[-_ ]/.test(text[origIdx])) {
+        origIdx++
+    }
+
+    // Find end position in original text
+    var matchLen = 0
+    var endIdx = origIdx
+    while (matchLen < normalizedQuery.length && endIdx < text.length) {
+        if (!/[-_ ]/.test(text[endIdx])) {
+            matchLen++
+        }
+        endIdx++
+    }
+
+    // Trim trailing separators from match
+    while (endIdx > origIdx && /[-_ ]/.test(text[endIdx - 1])) {
+        endIdx--
+    }
+
+    var before = text.slice(0, origIdx)
+    var match = text.slice(origIdx, endIdx)
+    var after = text.slice(endIdx)
+    return escapeHtml(before) + '<span class="filter-highlight">' + escapeHtml(match) + '</span>' + escapeHtml(after)
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 // Render initial data immediately, then connect SSE for updates
 updateApps(INITIAL_DATA || [])
