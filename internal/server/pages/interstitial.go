@@ -69,7 +69,7 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
         </div>
         <div class="status" id="status">{{.StatusText}}...</div>
         <div class="spinner" id="spinner"></div>
-        <div class="logs" id="logs">
+        <div class="logs-wrapper">
             <div class="logs-header">
                 <div class="logs-title">Logs</div>
                 <div class="logs-buttons" id="logs-buttons" style="display: none;">
@@ -78,7 +78,9 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
                     <button class="btn icon-btn claude-btn" id="fix-btn" onclick="fixWithClaudeCode()" style="display: none;" data-tooltip="Fix with Claude Code">{{.IconClaude}}</button>
                 </div>
             </div>
-            <div class="logs-content" id="logs-content"><span class="logs-empty">Waiting for output...</span></div>
+            <div class="logs" id="logs">
+                <div class="logs-content" id="logs-content"><span class="logs-empty">Waiting for output...</span></div>
+            </div>
         </div>
         <button class="btn btn-primary retry-btn" id="retry-btn" onclick="restartAndRetry()">Restart</button>
     </div>

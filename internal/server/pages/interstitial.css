@@ -69,15 +69,17 @@ h1 {
         transform: rotate(360deg);
     }
 }
-.logs {
+.logs-wrapper {
     background: var(--bg-logs);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 16px;
     text-align: left;
-    max-height: 350px;
-    overflow-y: auto;
     margin-bottom: 24px;
+}
+.logs {
+    max-height: 300px;
+    overflow-y: auto;
 }
 .logs-title {
     color: var(--text-secondary);

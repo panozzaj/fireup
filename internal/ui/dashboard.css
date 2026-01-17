@@ -174,10 +174,10 @@ h1 {
 @keyframes pulse {
     0%,
     100% {
-        opacity: 1;
+        background: var(--warning);
     }
     50% {
-        opacity: 0.4;
+        background: color-mix(in srgb, var(--warning) 40%, transparent);
     }
 }
 .status-placeholder {
