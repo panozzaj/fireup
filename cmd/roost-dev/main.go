@@ -22,6 +22,7 @@ import (
 	"github.com/panozzaj/roost-dev/internal/dns"
 	"github.com/panozzaj/roost-dev/internal/logo"
 	"github.com/panozzaj/roost-dev/internal/server"
+	"github.com/panozzaj/roost-dev/internal/setup"
 )
 
 // GlobalConfig stores persistent settings
@@ -56,43 +57,28 @@ func confirmStep(prompt string) bool {
 	return response == "y" || response == "Y"
 }
 
+// setupChecker is used to check installation status
+var setupChecker = setup.NewChecker()
+
 // isPortForwardingInstalled checks if port forwarding appears to be set up
 func isPortForwardingInstalled(tld string) bool {
-	// Check for key files that indicate port forwarding is installed
-	if _, err := os.Stat("/etc/pf.anchors/roost-dev"); err != nil {
-		return false
-	}
-	if _, err := os.Stat("/Library/LaunchDaemons/dev.roost.pfctl.plist"); err != nil {
-		return false
-	}
-	if _, err := os.Stat(fmt.Sprintf("/etc/resolver/%s", tld)); err != nil {
-		return false
-	}
-	return true
+	return setupChecker.IsPortForwardingInstalled(tld)
 }
 
 // isCertInstalled checks if certificates appear to be set up
 func isCertInstalled(configDir string) bool {
-	caKeyPath := filepath.Join(configDir, "certs", "ca-key.pem")
-	caCertPath := filepath.Join(configDir, "certs", "ca.pem")
-	if _, err := os.Stat(caKeyPath); err != nil {
-		return false
-	}
-	if _, err := os.Stat(caCertPath); err != nil {
-		return false
-	}
-	return true
+	return setupChecker.IsCertInstalled(configDir)
 }
 
 // isServiceInstalled checks if the background service appears to be set up
 // Returns (installed, running)
 func isServiceInstalled() (bool, bool) {
 	homeDir, _ := os.UserHomeDir()
-	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.roost-dev.plist")
-	if _, err := os.Stat(plistPath); err != nil {
+	installed := setupChecker.IsServiceInstalled(homeDir)
+	if !installed {
 		return false, false
 	}
-	// Check if it's running
+	// Check if it's running (requires exec, not abstracted)
 	cmd := exec.Command("launchctl", "list", "com.roost-dev")
 	if err := cmd.Run(); err != nil {
 		return true, false
