@@ -48,6 +48,58 @@ func printLogo() {
 	}
 }
 
+// confirmStep prompts the user for y/N confirmation and returns true if they confirm
+func confirmStep(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	var response string
+	fmt.Scanln(&response)
+	return response == "y" || response == "Y"
+}
+
+// isPortForwardingInstalled checks if port forwarding appears to be set up
+func isPortForwardingInstalled(tld string) bool {
+	// Check for key files that indicate port forwarding is installed
+	if _, err := os.Stat("/etc/pf.anchors/roost-dev"); err != nil {
+		return false
+	}
+	if _, err := os.Stat("/Library/LaunchDaemons/dev.roost.pfctl.plist"); err != nil {
+		return false
+	}
+	if _, err := os.Stat(fmt.Sprintf("/etc/resolver/%s", tld)); err != nil {
+		return false
+	}
+	return true
+}
+
+// isCertInstalled checks if certificates appear to be set up
+func isCertInstalled(configDir string) bool {
+	caKeyPath := filepath.Join(configDir, "certs", "ca-key.pem")
+	caCertPath := filepath.Join(configDir, "certs", "ca.pem")
+	if _, err := os.Stat(caKeyPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(caCertPath); err != nil {
+		return false
+	}
+	return true
+}
+
+// isServiceInstalled checks if the background service appears to be set up
+// Returns (installed, running)
+func isServiceInstalled() (bool, bool) {
+	homeDir, _ := os.UserHomeDir()
+	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.roost-dev.plist")
+	if _, err := os.Stat(plistPath); err != nil {
+		return false, false
+	}
+	// Check if it's running
+	cmd := exec.Command("launchctl", "list", "com.roost-dev")
+	if err := cmd.Run(); err != nil {
+		return true, false
+	}
+	return true, true
+}
+
 func main() {
 	// Handle no args or help
 	if len(os.Args) < 2 {
@@ -732,6 +784,12 @@ func getUserLaunchAgentPath() string {
 }
 
 func runServiceInstall() error {
+	// LaunchAgents must be installed as the user, not root
+	// Even with SUDO_UID, root can't bootstrap into another user's GUI domain
+	if os.Geteuid() == 0 {
+		return fmt.Errorf("cannot install user LaunchAgent as root; run 'roost-dev service install' without sudo")
+	}
+
 	homeDir, _ := os.UserHomeDir()
 	plistPath := getUserLaunchAgentPath()
 	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
@@ -810,28 +868,25 @@ func runServiceInstall() error {
 }
 
 func runServiceUninstall() error {
+	green := "\033[32m"
+	reset := "\033[0m"
+
 	plistPath := getUserLaunchAgentPath()
 
 	// Check if plist exists
 	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
-		fmt.Println("Service is not installed.")
+		fmt.Printf("%s✓ Service is not installed%s\n", green, reset)
 		return nil
 	}
 
 	// Unload the agent
-	fmt.Println("Stopping service...")
-	cmd := exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid()))
-	cmd.Run() // Ignore errors if not loaded
+	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid())).Run()
 
 	// Remove plist
-	fmt.Printf("Removing %s...\n", plistPath)
+	fmt.Printf("  Removing %s\n", plistPath)
 	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing plist: %w", err)
 	}
-
-	fmt.Println()
-	fmt.Println("Service uninstalled.")
-	fmt.Println("Run 'roost-dev serve' to start manually when needed.")
 
 	return nil
 }
@@ -1052,11 +1107,11 @@ func runCertInstall(configDir, tld string) error {
 
 	if err := cmd.Run(); err != nil {
 		fmt.Println()
-		fmt.Println("Failed to install CA automatically. You can install it manually:")
+		fmt.Println("To install manually:")
 		fmt.Printf("  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s\n", caPath)
 		fmt.Println()
 		fmt.Println("Or double-click the CA file and trust it in Keychain Access.")
-		return nil
+		return fmt.Errorf("failed to install CA into system trust store")
 	}
 
 	fmt.Println()
@@ -1078,22 +1133,20 @@ func runCertInstall(configDir, tld string) error {
 }
 
 func runCertUninstall() error {
+	green := "\033[32m"
+	reset := "\033[0m"
+
 	certsDir := getCertsDir()
 
 	if _, err := os.Stat(certsDir); os.IsNotExist(err) {
-		fmt.Println("No certificates installed.")
+		fmt.Printf("%s✓ No certificates installed%s\n", green, reset)
 		return nil
 	}
 
-	fmt.Printf("Removing certificates from %s...\n", certsDir)
+	fmt.Printf("  Removing %s\n", certsDir)
 	if err := os.RemoveAll(certsDir); err != nil {
 		return fmt.Errorf("removing certs directory: %w", err)
 	}
-
-	fmt.Println("Certificates removed.")
-	fmt.Println()
-	fmt.Println("Note: The roost-dev CA is still trusted in your system keychain.")
-	fmt.Println("To remove it, open Keychain Access and delete 'roost-dev Local CA'")
 
 	return nil
 }
@@ -1366,6 +1419,14 @@ rdr pass on lo0 inet6 proto tcp from any to any port 443 -> ::1 port 9443
 		return fmt.Errorf("writing launchd plist: %w", err)
 	}
 
+	// Load the LaunchDaemon so pf rules persist across reboots
+	// First unload if already loaded (ignore errors)
+	exec.Command("/bin/launchctl", "bootout", "system/dev.roost.pfctl").Run()
+	// Then bootstrap the daemon
+	if err := exec.Command("/bin/launchctl", "bootstrap", "system", launchdPlistPath).Run(); err != nil {
+		return fmt.Errorf("loading LaunchDaemon (are you running as root?): %w", err)
+	}
+
 	// Enable pf and load the rules now (suppress verbose pfctl output)
 	cmd := exec.Command("/sbin/pfctl", "-e", "-f", "/etc/pf.conf")
 	cmd.Run() // Ignore errors - pf may already be enabled
@@ -1596,6 +1657,18 @@ func listConfigFiles(configDir, tld string) error {
 }
 
 func runPortsUninstall(tld string) error {
+	green := "\033[32m"
+	reset := "\033[0m"
+
+	// Check if already uninstalled (before prompting for sudo)
+	if !isPortForwardingInstalled(tld) {
+		fmt.Printf("%s✓ Port forwarding is not installed%s\n", green, reset)
+		fmt.Println("  Not found: /etc/pf.anchors/roost-dev")
+		fmt.Println("  Not found: /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Printf("  Not found: /etc/resolver/%s\n", tld)
+		return nil
+	}
+
 	// If not running as root, re-invoke with sudo
 	if os.Geteuid() != 0 {
 		fmt.Println("Removing port forwarding requires administrator privileges.")
@@ -1618,48 +1691,59 @@ func runPortsUninstall(tld string) error {
 	}
 
 	fmt.Println("Removing port forwarding...")
+	removedSomething := false
 
-	// Flush our anchor
-	fmt.Println("Flushing roost-dev anchor...")
-	cmd := exec.Command("/sbin/pfctl", "-a", "roost-dev", "-F", "all")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run() // Ignore errors if anchor doesn't exist
+	// Flush our anchor (suppress output)
+	exec.Command("/sbin/pfctl", "-a", "roost-dev", "-F", "all").Run()
 
 	// Remove the anchor file
 	if _, err := os.Stat(pfAnchorPath); err == nil {
-		fmt.Printf("Removing %s...\n", pfAnchorPath)
+		fmt.Printf("  Removing %s\n", pfAnchorPath)
 		os.Remove(pfAnchorPath)
+		removedSomething = true
 	}
 
 	// Remove the launchd plist
 	if _, err := os.Stat(launchdPlistPath); err == nil {
-		fmt.Printf("Removing %s...\n", launchdPlistPath)
-		// Unload the launchd job first
-		exec.Command("/bin/launchctl", "unload", launchdPlistPath).Run()
+		fmt.Printf("  Removing %s\n", launchdPlistPath)
+		exec.Command("/bin/launchctl", "bootout", "system/dev.roost.pfctl").Run()
 		os.Remove(launchdPlistPath)
+		removedSomething = true
 	}
 
 	// Remove DNS resolver file for custom TLD
 	if tld != "localhost" {
 		resolverPath := fmt.Sprintf("/etc/resolver/%s", tld)
 		if _, err := os.Stat(resolverPath); err == nil {
-			fmt.Printf("Removing %s...\n", resolverPath)
+			fmt.Printf("  Removing %s\n", resolverPath)
 			os.Remove(resolverPath)
+			removedSomething = true
 		}
 	}
 
-	fmt.Println()
-	fmt.Println("Port forwarding removed!")
-	fmt.Println()
-	fmt.Println("Note: /etc/pf.conf was not modified. To fully remove:")
-	fmt.Println("  sudo cp /etc/pf.conf.roost-dev-backup /etc/pf.conf")
+	if removedSomething {
+		fmt.Printf("%s✓ Port forwarding removed%s\n", green, reset)
+	}
+
+	// Only mention backup if it exists
+	backupPath := "/etc/pf.conf.roost-dev-backup"
+	if _, err := os.Stat(backupPath); err == nil {
+		fmt.Println()
+		fmt.Println("Note: /etc/pf.conf still contains roost-dev references.")
+		fmt.Println("To restore original pf.conf:")
+		fmt.Printf("  sudo cp %s /etc/pf.conf\n", backupPath)
+	}
 
 	return nil
 }
 
 // runSetupWizard is the interactive setup wizard
 func runSetupWizard(configDir, tld string) {
+	red := "\033[31m"
+	yellow := "\033[33m"
+	green := "\033[32m"
+	reset := "\033[0m"
+
 	printLogo()
 	fmt.Println()
 	fmt.Println("Welcome to roost-dev setup!")
@@ -1682,53 +1766,135 @@ func runSetupWizard(configDir, tld string) {
 	fmt.Println("  3. BACKGROUND SERVICE")
 	fmt.Println("     Installs a LaunchAgent so roost-dev starts automatically")
 	fmt.Println("     when you log in. Your apps are always ready!")
-	fmt.Println("     Requires: nothing")
+	fmt.Println("     Requires: nothing (runs as your user)")
 	fmt.Println("       - Writes to ~/Library/LaunchAgents/com.roost-dev.plist")
 	fmt.Println()
-	fmt.Println("─────────────────────────────────────────────────────────────────")
-	fmt.Println()
+	fmt.Println("Each step will ask for confirmation before making changes.")
+	fmt.Println("Steps that need sudo will prompt for your password.")
 
-	// Step 1: Port forwarding
-	fmt.Println("Step 1/3: Port Forwarding")
-	fmt.Println()
-	if err := runPortsInstall(configDir, tld); err != nil {
-		fmt.Printf("\n⚠ Port forwarding failed: %v\n", err)
-		fmt.Println("You can retry later with: roost-dev ports install")
+	// Check for root AFTER showing overview so user understands the context
+	if os.Geteuid() == 0 {
 		fmt.Println()
-	} else {
+		fmt.Printf("%sError: Do not run 'roost-dev setup' with sudo.%s\n", red, reset)
 		fmt.Println()
+		fmt.Println("Run it as your normal user instead:")
+		fmt.Println("  roost-dev setup")
+		os.Exit(1)
 	}
 
-	// Step 2: Certificates
+	fmt.Println()
 	fmt.Println("─────────────────────────────────────────────────────────────────")
+
+	// Step 1: Port forwarding
+	fmt.Println()
+	fmt.Println("Step 1/3: Port Forwarding")
+	fmt.Println()
+	if isPortForwardingInstalled(tld) {
+		fmt.Printf("%s✓ Already installed%s\n", green, reset)
+		fmt.Println("  Found: /etc/pf.anchors/roost-dev")
+		fmt.Println("  Found: /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Printf("  Found: /etc/resolver/%s\n", tld)
+	} else {
+		fmt.Println("This step lets you access apps at http://myapp.test instead of")
+		fmt.Println("http://localhost:9280. It configures macOS packet filter (pf) to")
+		fmt.Println("redirect ports 80/443 to roost-dev.")
+		fmt.Println()
+		fmt.Println("What it does:")
+		fmt.Println("  - Creates /etc/pf.anchors/roost-dev (firewall redirect rules)")
+		fmt.Println("  - Adds anchor to /etc/pf.conf (backs up original first)")
+		fmt.Println("  - Creates /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Println("    (loads pf rules on boot)")
+		fmt.Printf("  - Creates /etc/resolver/%s (DNS for .%s domain)\n", tld, tld)
+		fmt.Println()
+		fmt.Println("Requires: sudo (will prompt for password)")
+		fmt.Println()
+		if confirmStep("Install port forwarding?") {
+			if err := runPortsInstall(configDir, tld); err != nil {
+				fmt.Printf("\n%s⚠ Port forwarding failed: %v%s\n", yellow, err, reset)
+				fmt.Println("You can retry later with: roost-dev ports install")
+			} else {
+				fmt.Printf("%s✓ Port forwarding installed%s\n", green, reset)
+			}
+		} else {
+			fmt.Println("Skipped. You can run this later with: roost-dev ports install")
+		}
+	}
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+
+	// Step 2: Certificates
 	fmt.Println()
 	fmt.Println("Step 2/3: HTTPS Certificates")
 	fmt.Println()
-	if err := runCertInstall(configDir, tld); err != nil {
-		fmt.Printf("\n⚠ Certificate setup failed: %v\n", err)
-		fmt.Println("You can retry later with: roost-dev cert install")
-		fmt.Println()
+	if isCertInstalled(configDir) {
+		fmt.Printf("%s✓ Already installed%s\n", green, reset)
+		fmt.Printf("  Found: %s/certs/ca-key.pem\n", configDir)
+		fmt.Printf("  Found: %s/certs/ca.pem\n", configDir)
 	} else {
+		fmt.Println("This step enables https://myapp.test with no browser warnings.")
+		fmt.Println("It creates a local Certificate Authority (CA) and adds it to your")
+		fmt.Println("system keychain as a trusted root.")
 		fmt.Println()
+		fmt.Println("What it does:")
+		fmt.Printf("  - Generates CA in %s/certs/\n", configDir)
+		fmt.Println("  - Adds CA to /Library/Keychains/System.keychain (trusted root)")
+		fmt.Println()
+		fmt.Println("Requires: sudo (will prompt for password)")
+		fmt.Println()
+		if confirmStep("Install HTTPS certificates?") {
+			if err := runCertInstall(configDir, tld); err != nil {
+				fmt.Printf("\n%s⚠ Certificate setup failed: %v%s\n", yellow, err, reset)
+				fmt.Println("You can retry later with: roost-dev cert install")
+			} else {
+				fmt.Printf("%s✓ HTTPS certificates installed%s\n", green, reset)
+			}
+		} else {
+			fmt.Println("Skipped. You can run this later with: roost-dev cert install")
+		}
 	}
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
 
 	// Step 3: Background service
-	fmt.Println("─────────────────────────────────────────────────────────────────")
 	fmt.Println()
 	fmt.Println("Step 3/3: Background Service")
 	fmt.Println()
-	if err := runServiceInstall(); err != nil {
-		fmt.Printf("\n⚠ Service install failed: %v\n", err)
-		fmt.Println("You can retry later with: roost-dev service install")
-		fmt.Println()
+	installed, running := isServiceInstalled()
+	if installed {
+		fmt.Printf("%s✓ Already installed%s\n", green, reset)
+		fmt.Println("  Found: ~/Library/LaunchAgents/com.roost-dev.plist")
+		if running {
+			fmt.Println("  Status: running")
+		} else {
+			fmt.Printf("  %sStatus: not running%s\n", yellow, reset)
+		}
 	} else {
+		fmt.Println("This step makes roost-dev start automatically when you log in,")
+		fmt.Println("so your apps are always accessible.")
 		fmt.Println()
+		fmt.Println("What it does:")
+		fmt.Println("  - Creates ~/Library/LaunchAgents/com.roost-dev.plist")
+		fmt.Println("  - Starts roost-dev immediately")
+		fmt.Println()
+		fmt.Println("Requires: nothing (no sudo needed)")
+		fmt.Println()
+		if confirmStep("Install background service?") {
+			if err := runServiceInstall(); err != nil {
+				fmt.Printf("\n%s⚠ Service install failed: %v%s\n", yellow, err, reset)
+				fmt.Println("You can retry later with: roost-dev service install")
+			} else {
+				fmt.Printf("%s✓ Background service installed%s\n", green, reset)
+			}
+		} else {
+			fmt.Println("Skipped. You can run this later with: roost-dev service install")
+		}
 	}
+	fmt.Println()
 
 	// Final summary
 	fmt.Println("─────────────────────────────────────────────────────────────────")
 	fmt.Println()
-	fmt.Println("Setup complete! roost-dev is ready to use.")
+	fmt.Println("Setup complete!")
 	fmt.Println()
 	fmt.Printf("  Dashboard:  http://roost-dev.%s\n", tld)
 	fmt.Printf("  Dashboard:  https://roost-dev.%s (HTTPS)\n", tld)
@@ -1741,39 +1907,107 @@ func runSetupWizard(configDir, tld string) {
 
 // runTeardownWizard removes all roost-dev configuration
 func runTeardownWizard(tld string) {
-	fmt.Println("Removing all roost-dev components...")
-	fmt.Println()
+	yellow := "\033[33m"
+	green := "\033[32m"
+	reset := "\033[0m"
 
-	// Step 1: Stop and remove service
-	fmt.Println("Step 1/3: Removing background service...")
-	if err := runServiceUninstall(); err != nil {
-		fmt.Printf("  ⚠ Service removal failed: %v\n", err)
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".config", "roost-dev")
+
+	fmt.Println("roost-dev teardown")
+	fmt.Println()
+	fmt.Println("This will remove all roost-dev components from your system.")
+	fmt.Println("Each step will ask for confirmation before making changes.")
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+
+	// Step 1: Background service
+	fmt.Println()
+	fmt.Println("Step 1/3: Background Service")
+	fmt.Println()
+	installed, running := isServiceInstalled()
+	if !installed {
+		fmt.Printf("%s✓ Already removed%s\n", green, reset)
+		fmt.Println("  Not found: ~/Library/LaunchAgents/com.roost-dev.plist")
 	} else {
-		fmt.Println("  ✓ Service removed")
+		fmt.Println("Will remove:")
+		fmt.Println("  - ~/Library/LaunchAgents/com.roost-dev.plist")
+		if running {
+			fmt.Println("  - Stop running service")
+		}
+		fmt.Println()
+		if confirmStep("Remove background service?") {
+			if err := runServiceUninstall(); err != nil {
+				fmt.Printf("%s⚠ Service removal failed: %v%s\n", yellow, err, reset)
+			} else {
+				fmt.Printf("%s✓ Background service removed%s\n", green, reset)
+			}
+		} else {
+			fmt.Println("Skipped.")
+		}
+	}
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+
+	// Step 2: Certificates
+	fmt.Println()
+	fmt.Println("Step 2/3: HTTPS Certificates")
+	fmt.Println()
+	if !isCertInstalled(configDir) {
+		fmt.Printf("%s✓ Already removed%s\n", green, reset)
+		fmt.Printf("  Not found: %s/certs/\n", configDir)
+	} else {
+		fmt.Println("Will remove:")
+		fmt.Printf("  - %s/certs/ (CA key and certificate)\n", configDir)
+		fmt.Println()
+		fmt.Println("Note: The CA in your system keychain must be removed manually")
+		fmt.Println("      via Keychain Access (search for 'roost-dev Local CA')")
+		fmt.Println()
+		if confirmStep("Remove HTTPS certificates?") {
+			if err := runCertUninstall(); err != nil {
+				fmt.Printf("%s⚠ Certificate removal failed: %v%s\n", yellow, err, reset)
+			} else {
+				fmt.Printf("%s✓ HTTPS certificates removed%s\n", green, reset)
+			}
+		} else {
+			fmt.Println("Skipped.")
+		}
+	}
+	fmt.Println()
+	fmt.Println("─────────────────────────────────────────────────────────────────")
+
+	// Step 3: Port forwarding
+	fmt.Println()
+	fmt.Println("Step 3/3: Port Forwarding")
+	fmt.Println()
+	if !isPortForwardingInstalled(tld) {
+		fmt.Printf("%s✓ Already removed%s\n", green, reset)
+		fmt.Println("  Not found: /etc/pf.anchors/roost-dev")
+		fmt.Println("  Not found: /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Printf("  Not found: /etc/resolver/%s\n", tld)
+	} else {
+		fmt.Println("Will remove:")
+		fmt.Println("  - /etc/pf.anchors/roost-dev")
+		fmt.Println("  - /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Printf("  - /etc/resolver/%s\n", tld)
+		fmt.Println()
+		fmt.Println("Requires: sudo (will prompt for password)")
+		fmt.Println()
+		if confirmStep("Remove port forwarding?") {
+			if err := runPortsUninstall(tld); err != nil {
+				fmt.Printf("%s⚠ Port forwarding removal failed: %v%s\n", yellow, err, reset)
+			}
+			// runPortsUninstall prints its own success message
+		} else {
+			fmt.Println("Skipped.")
+		}
 	}
 	fmt.Println()
 
-	// Step 2: Remove certificates
-	fmt.Println("Step 2/3: Removing certificates...")
-	if err := runCertUninstall(); err != nil {
-		fmt.Printf("  ⚠ Certificate removal failed: %v\n", err)
-	} else {
-		fmt.Println("  ✓ Certificates removed")
-	}
+	fmt.Println("─────────────────────────────────────────────────────────────────")
 	fmt.Println()
-
-	// Step 3: Remove port forwarding
-	fmt.Println("Step 3/3: Removing port forwarding...")
-	if err := runPortsUninstall(tld); err != nil {
-		fmt.Printf("  ⚠ Port forwarding removal failed: %v\n", err)
-	} else {
-		fmt.Println("  ✓ Port forwarding removed")
-	}
-	fmt.Println()
-
 	fmt.Println("Teardown complete!")
 	fmt.Println()
-	fmt.Println("roost-dev configuration has been removed.")
 	fmt.Println("To reinstall, run: roost-dev setup")
 }
 
