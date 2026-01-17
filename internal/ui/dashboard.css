@@ -48,6 +48,12 @@ h1 {
 .theme-toggle:hover {
     background: var(--btn-hover);
 }
+.theme-toggle::after {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 6px;
+}
 .connection-status {
     font-size: 12px;
     color: var(--text-muted);
