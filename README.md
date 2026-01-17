@@ -198,13 +198,22 @@ Logs are written to `~/Library/Logs/roost-dev/`.
 
 ## Known Issues
 
-### Docker
+### Docker Desktop
 
-Docker Desktop on macOS may interfere with roost-dev's port forwarding. Both use macOS's `pf` (packet filter) for port redirection, and Docker can clear roost-dev's rules when it starts or restarts.
+> [!CAUTION]
+> Docker Desktop on macOS is not currently compatible with roost-dev's port forwarding.
 
-roost-dev includes a workaround: a LaunchDaemon that reloads the pf rules every 30 seconds. This means if Docker clears the rules, they'll be restored within 30 seconds.
+Both Docker Desktop and roost-dev use macOS's `pf` (packet filter) for port redirection. When Docker starts or restarts, it clears roost-dev's pf rules, breaking access to `*.test` domains.
 
-If you're heavily using Docker with roost-dev and encounter issues, pull requests are welcome to improve this integration.
+**Workaround:** After starting Docker Desktop, re-run:
+
+```bash
+roost-dev ports install
+```
+
+**Alternative:** Access apps directly via `localhost:9280` instead of `*.test` domains.
+
+Pull requests to improve Docker compatibility are welcome.
 
 ## License
 

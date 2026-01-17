@@ -452,9 +452,6 @@ DESCRIPTION:
       - Port 80  → 9280 (HTTP)
       - Port 443 → 9443 (HTTPS)
 
-    A LaunchDaemon reloads the pf rules every 30 seconds, ensuring they
-    persist even when Docker or other tools reload pf.conf.
-
     Requires sudo for system configuration.
 
 EXAMPLES:
@@ -1227,19 +1224,6 @@ const (
 
 	// expectedPfPlistContent is the expected content of the pf LaunchDaemon plist.
 	// Used by both isPfPlistOutdated() and runPortsInstall() to stay in sync.
-	//
-	// Architecture note: macOS pf (packet filter) uses anchors to organize rules.
-	// We add our rules to /etc/pf.anchors/roost-dev and reference them from /etc/pf.conf.
-	// The LaunchDaemon loads ONLY our anchor (not the full pf.conf) every 30 seconds.
-	//
-	// Why periodic reloading?
-	// - Docker and other tools may reload /etc/pf.conf, which can clear anchor state
-	// - By reloading just our anchor periodically, we restore rules without affecting
-	//   other pf users (Docker, VPNs, etc.)
-	// - Using "-a roost-dev" targets only our anchor, leaving other rules untouched
-	//
-	// The 30-second interval ensures rules are restored quickly after Docker interference
-	// while being lightweight (pfctl anchor reload is idempotent and fast).
 	expectedPfPlistContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1249,15 +1233,12 @@ const (
     <key>ProgramArguments</key>
     <array>
         <string>/sbin/pfctl</string>
-        <string>-a</string>
-        <string>roost-dev</string>
+        <string>-e</string>
         <string>-f</string>
-        <string>/etc/pf.anchors/roost-dev</string>
+        <string>/etc/pf.conf</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
-    <key>StartInterval</key>
-    <integer>30</integer>
 </dict>
 </plist>
 `
@@ -1861,11 +1842,8 @@ func runSetupWizard(configDir, tld string) {
 		fmt.Println("  - Creates /etc/pf.anchors/roost-dev (firewall redirect rules)")
 		fmt.Println("  - Adds anchor to /etc/pf.conf (backs up original first)")
 		fmt.Println("  - Creates /Library/LaunchDaemons/dev.roost.pfctl.plist")
-		fmt.Println("    (loads pf rules on boot and reloads every 30s)")
+		fmt.Println("    (loads pf rules on boot)")
 		fmt.Printf("  - Creates /etc/resolver/%s (DNS for .%s domain)\n", tld, tld)
-		fmt.Println()
-		fmt.Println("Note: Rules reload periodically to coexist with Docker/VPNs that")
-		fmt.Println("      may also modify pf rules.")
 		fmt.Println()
 		fmt.Println("Requires: sudo (will prompt for password)")
 		fmt.Println()
