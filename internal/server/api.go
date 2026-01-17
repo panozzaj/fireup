@@ -351,18 +351,21 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 
 ## About roost-dev
 roost-dev is a local development server that manages apps via config files in ~/.config/roost-dev/.
-- Config file for this app: ~/.config/roost-dev/%s.yml
-- Run "roost-dev --help" to learn about available CLI commands
-- To restart the app: roost-dev restart %s
-- To stop the app: roost-dev stop %s
+Config file for this app: ~/.config/roost-dev/%s.yml
 
 ## Logs
 `+"```"+`
 %s
 `+"```"+`
 
-Please help me fix this error. After fixing, restart the app using "roost-dev restart %s" and verify it starts successfully.`,
-		name, name, name, name, logsText, name)
+## Useful commands
+  roost-dev restart %s  # Restart this app
+  roost-dev logs %s     # View logs
+  roost-dev --help      # CLI help
+  roost-dev docs        # Full documentation
+
+Please help me fix this error. After fixing, restart the app and verify it starts successfully.`,
+		name, name, logsText, name, name)
 
 	// Write prompt to a temp file to avoid shell escaping issues
 	tmpFile, err := os.CreateTemp("", "roost-dev-prompt-*.txt")
