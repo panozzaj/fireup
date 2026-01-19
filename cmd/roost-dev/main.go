@@ -1602,7 +1602,7 @@ func runList() error {
 				}
 			}
 			if runningCount == 0 {
-				status = "stopped"
+				status = "idle"
 			} else if runningCount == len(app.Services) {
 				status = "running"
 			} else {
@@ -1612,7 +1612,7 @@ func runList() error {
 			if app.Running {
 				status = "running"
 			} else {
-				status = "stopped"
+				status = "idle"
 			}
 		}
 
@@ -1621,7 +1621,7 @@ func runList() error {
 		switch {
 		case status == "running":
 			paddedStatus = "\033[32m" + paddedStatus + "\033[0m" // green
-		case status == "stopped":
+		case status == "idle":
 			paddedStatus = "\033[90m" + paddedStatus + "\033[0m" // gray
 		case strings.Contains(status, "/"):
 			paddedStatus = "\033[33m" + paddedStatus + "\033[0m" // yellow for partial
@@ -1632,6 +1632,38 @@ func runList() error {
 			name = fmt.Sprintf("%s (%s)", app.Name, strings.Join(app.Aliases, ", "))
 		}
 		fmt.Printf("%-25s %s %s\n", name, paddedStatus, app.URL)
+
+		// Print services for multi-service apps (tree view)
+		if app.Type == "multi-service" && len(app.Services) > 0 {
+			for i, svc := range app.Services {
+				// Determine tree character
+				var prefix string
+				if i == len(app.Services)-1 {
+					prefix = "└─"
+				} else {
+					prefix = "├─"
+				}
+
+				// Determine service status
+				var svcStatus string
+				if svc.Running {
+					svcStatus = "running"
+				} else {
+					svcStatus = "idle"
+				}
+
+				// Format and colorize status
+				svcPaddedStatus := fmt.Sprintf("%-10s", svcStatus)
+				if svcStatus == "running" {
+					svcPaddedStatus = "\033[32m" + svcPaddedStatus + "\033[0m" // green
+				} else {
+					svcPaddedStatus = "\033[90m" + svcPaddedStatus + "\033[0m" // gray
+				}
+
+				svcName := fmt.Sprintf("%s %s", prefix, svc.Name)
+				fmt.Printf("  %-23s %s %s\n", svcName, svcPaddedStatus, svc.URL)
+			}
+		}
 	}
 
 	return nil
