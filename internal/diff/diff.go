@@ -52,6 +52,87 @@ func (p *Plan) HasChanges() bool {
 	return len(p.ops) > 0
 }
 
+// ChangeSummary represents a summary of planned changes
+type ChangeSummary struct {
+	Creates  []string // Files to create (new)
+	Modifies []string // Files to modify (existing, different content)
+	Deletes  []string // Files to delete
+}
+
+// Summary returns a summary of what will change, checking actual file contents.
+// Returns nil if there are no actual changes.
+func (p *Plan) Summary() *ChangeSummary {
+	if !p.HasChanges() {
+		return nil
+	}
+
+	summary := &ChangeSummary{}
+
+	for _, op := range p.ops {
+		existingBytes, err := os.ReadFile(op.Path)
+		exists := err == nil
+
+		switch op.Operation {
+		case "create":
+			newContent := ""
+			if op.Content != nil {
+				content, err := op.Content()
+				if err == nil {
+					newContent = content
+				}
+			}
+
+			// Skip if content is identical
+			if exists && string(existingBytes) == newContent {
+				continue
+			}
+
+			if exists {
+				summary.Modifies = append(summary.Modifies, op.Path)
+			} else {
+				summary.Creates = append(summary.Creates, op.Path)
+			}
+
+		case "delete":
+			if exists {
+				summary.Deletes = append(summary.Deletes, op.Path)
+			}
+		}
+	}
+
+	// Return nil if no actual changes
+	if len(summary.Creates) == 0 && len(summary.Modifies) == 0 && len(summary.Deletes) == 0 {
+		return nil
+	}
+
+	return summary
+}
+
+// Print displays the summary in a compact format
+func (s *ChangeSummary) Print() {
+	green := "\033[32m"
+	yellow := "\033[33m"
+	red := "\033[31m"
+	reset := "\033[0m"
+
+	fmt.Println()
+	for _, path := range s.Creates {
+		fmt.Printf("  %s+%s %s (new)\n", green, reset, path)
+	}
+	for _, path := range s.Modifies {
+		fmt.Printf("  %s~%s %s (modified)\n", yellow, reset, path)
+	}
+	for _, path := range s.Deletes {
+		fmt.Printf("  %s-%s %s (delete)\n", red, reset, path)
+	}
+	fmt.Println()
+}
+
+// HasChanges returns true if there are any changes in the summary
+func (s *ChangeSummary) HasChanges() bool {
+	return len(s.Creates) > 0 || len(s.Modifies) > 0 || len(s.Deletes) > 0
+}
+
 // Preview displays the planned changes in unified diff format.
 // Returns true if there are actual changes to show, false if all files are unchanged.
 func (p *Plan) Preview() bool {
