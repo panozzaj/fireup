@@ -1,6 +1,6 @@
 # roost-dev
 
-A local development proxy for all your projects. Like [puma-dev](https://github.com/puma/puma-dev), but language-agnostic.
+A local development proxy for all your projects.
 
 > [!WARNING]
 > This is a development tool only. Do not use in production.
@@ -10,6 +10,7 @@ A local development proxy for all your projects. Like [puma-dev](https://github.
 - Works with any web server (Node, Ruby, Python, Elixir, Go, Rust, etc.)
 - Dynamic port allocation - no more port conflicts
 - On-demand startup - services start when you access them
+- Single or multi-service projects
 - Subdomain support - `admin.myapp.test` passes through to your app
 - Wildcard domains - `*.myapp.test` works too
 - Static file serving
@@ -27,20 +28,19 @@ go install github.com/panozzaj/roost-dev/cmd/roost-dev@latest
 
 This installs the `roost-dev` binary to your `$GOPATH/bin` (usually `~/go/bin`). Make sure this is in your PATH.
 
+(I'm not super familiar with the Golang ecosystem, so if there's a better way to distribute this package, please open an issue or PR.)
+
 ## Quick Start
 
 ```bash
-# One-time setup
-sudo roost-dev setup
+roost-dev setup
 ```
 
 Then visit **http://roost-dev.test** to see the dashboard.
 
-Create configs in `~/.config/roost-dev/` for your apps (see Configuration below).
-
 ## Configuration
 
-Place config files in `~/.config/roost-dev/`. The filename becomes the app name.
+Place service config files in `~/.config/roost-dev/`. Unless specified otherwise, the filename (without extension) is the app name and domain.
 
 ### YAML config (recommended)
 
@@ -93,6 +93,8 @@ cmd: bundle exec jekyll serve --port $PORT --host 127.0.0.1 --livereload-port $(
 
 Note: Port numbers must be under 65535, so keep offsets small when roost-dev assigns high ports (50000+).
 
+We may add first-class multi-port feature later.
+
 ### Static files
 
 For serving static files, use a symlink to the directory:
@@ -109,8 +111,6 @@ Or in YAML:
 root: ~/projects/my-site
 static: true
 ```
-
-Static sites show an HTML5 icon on the dashboard (since they're always available).
 
 ### Fixed port proxy
 
@@ -214,6 +214,15 @@ roost-dev ports install
 **Alternative:** Access apps directly via `localhost:9280` instead of `*.test` domains.
 
 Pull requests to improve Docker compatibility are welcome.
+
+## Status
+
+**Version 0.9.0** - Pre-release
+
+This tool is under active development. The setup and operation work on my Mac and meet my current needs across a variety of stacks. I plan to bump to version 1.0 once I get feedback that it works reliably on other machines and that setup is straightforward.
+
+If you run into issues or have improvements, I'm open to PRs. For larger changes, consider opening an issue first to discuss the approach. I prefer smaller incremental PRs over large ones.
+
 
 ## License
 
