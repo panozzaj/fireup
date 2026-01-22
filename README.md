@@ -2,9 +2,6 @@
 
 A local development proxy for all your projects.
 
-> [!WARNING]
-> This is a development tool only. Do not use in production.
-
 ## Key Features
 
 - Works with any web server (Node, Ruby, Python, Elixir, Go, Rust, etc.)
@@ -197,6 +194,9 @@ roost-dev service uninstall   # Stop and remove
 Logs are written to `~/Library/Logs/roost-dev/`.
 
 ## Known Issues
+
+> [!WARNING]
+> This is a development tool only. Do not use in production.
 
 ### Docker Desktop
 
