@@ -3,7 +3,10 @@ var container = document.querySelector('.container')
 var appName = container.dataset.app
 var configName = container.dataset.config
 var tld = container.dataset.tld
-var baseUrl = window.location.protocol + '//roost-dev.' + tld
+// When accessed via Tailscale (.ts.net), use same origin for API calls
+// Otherwise use roost-dev.{tld} for local development
+var isTailscale = window.location.hostname.endsWith('.ts.net')
+var baseUrl = isTailscale ? window.location.origin : window.location.protocol + '//roost-dev.' + tld
 var failed = container.dataset.failed === 'true'
 var lastLogCount = 0
 var buttonsShown = false

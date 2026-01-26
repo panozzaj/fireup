@@ -50,6 +50,12 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse hostname: [service-]appname.tld
+	// Also support Tailscale Serve: requests from *.ts.net use path-based routing
+	if strings.HasSuffix(host, ".ts.net") {
+		s.handleTailscaleRequest(w, r)
+		return
+	}
+
 	if !strings.HasSuffix(host, "."+s.cfg.TLD) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
@@ -430,4 +436,85 @@ func (s *Server) resolveServiceName(name string) *ServiceMatch {
 	}
 
 	return nil
+}
+
+// handleTailscaleRequest handles requests from Tailscale Serve using path-based routing.
+// URL format: https://machine.tailnet.ts.net/appname/path... → routes to appname.test/path...
+// Also supports service names: /api-focustrack/... → routes to api service of focustrack app
+func (s *Server) handleTailscaleRequest(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	// Route /api/* to dashboard API (for interstitial page polling, etc.)
+	if strings.HasPrefix(path, "/api/") {
+		s.handleDashboard(w, r)
+		return
+	}
+
+	// Extract app/service name from first path segment: /appname/... → appname
+	if path == "" || path == "/" {
+		// No app specified - show available apps
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, pages.Error(
+			"Tailscale Serve",
+			"Specify an app in the path: /appname/...",
+			s.listAppsHTML(),
+			s.cfg.TLD, s.getTheme()))
+		return
+	}
+
+	// Parse /appname/remaining/path
+	path = strings.TrimPrefix(path, "/")
+	parts := strings.SplitN(path, "/", 2)
+	name := parts[0]
+	remainingPath := "/"
+	if len(parts) > 1 {
+		remainingPath = "/" + parts[1]
+	}
+
+	// Rewrite the request path to strip the app/service prefix
+	r.URL.Path = remainingPath
+	r.URL.RawPath = "" // Clear encoded path to force re-encoding
+
+	// First, try service name pattern (e.g., api-focustrack)
+	if idx := strings.Index(name, "-"); idx != -1 {
+		serviceName := name[:idx]
+		appName := name[idx+1:]
+		if app, svc, found := s.apps.GetService(appName, serviceName); found {
+			s.handleService(w, r, app, svc)
+			return
+		}
+	}
+
+	// Try as app name or alias
+	app, found := s.apps.GetByNameOrAlias(name)
+	if !found {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, pages.Error(
+			"App not found",
+			fmt.Sprintf("No app or service configured for '%s'", name),
+			s.listAppsHTML(),
+			s.cfg.TLD, s.getTheme()))
+		return
+	}
+
+	s.handleApp(w, r, app)
+}
+
+// listAppsHTML returns an HTML list of available apps and services for Tailscale routing
+func (s *Server) listAppsHTML() string {
+	var sb strings.Builder
+	sb.WriteString(`<p class="hint">Available apps and services:</p><ul>`)
+	for _, app := range s.apps.All() {
+		if app.Type == config.AppTypeYAML && len(app.Services) > 0 {
+			// Multi-service app - list services
+			for _, svc := range app.Services {
+				sb.WriteString(fmt.Sprintf("<li>/%s-%s/</li>", svc.Name, app.Name))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("<li>/%s/</li>", app.Name))
+		}
+	}
+	sb.WriteString("</ul>")
+	return sb.String()
 }

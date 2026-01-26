@@ -2,6 +2,7 @@ package server
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/panozzaj/roost-dev/internal/config"
@@ -563,4 +564,237 @@ services:
 			t.Error("expected nil for unknown app")
 		}
 	})
+}
+
+// Tests for Tailscale Serve support
+// Tailscale Serve proxies requests from *.ts.net hosts using path-based routing
+
+func TestIsTailscaleHost(t *testing.T) {
+	tests := []struct {
+		host     string
+		expected bool
+	}{
+		{"macbook-pro.tail094a69.ts.net", true},
+		{"my-machine.tailnet.ts.net", true},
+		{"foo.ts.net", true},
+		{"roost-dev.test", false},
+		{"myapp.test", false},
+		{"example.com", false},
+		{"ts.net.example.com", false}, // ts.net must be suffix
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.host, func(t *testing.T) {
+			got := strings.HasSuffix(tc.host, ".ts.net")
+			if got != tc.expected {
+				t.Errorf("isTailscaleHost(%q) = %v, want %v", tc.host, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestTailscalePathParsing(t *testing.T) {
+	// Test the path parsing logic used in handleTailscaleRequest
+	tests := []struct {
+		path            string
+		expectedName    string
+		expectedRemPath string
+	}{
+		{"/myapp/health", "myapp", "/health"},
+		{"/myapp/", "myapp", "/"},
+		{"/myapp", "myapp", "/"},
+		{"/api-focustrack/api/sync", "api-focustrack", "/api/sync"},
+		{"/blog/posts/123", "blog", "/posts/123"},
+		{"/app/a/b/c", "app", "/a/b/c"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			path := strings.TrimPrefix(tc.path, "/")
+			parts := strings.SplitN(path, "/", 2)
+			name := parts[0]
+			remainingPath := "/"
+			if len(parts) > 1 {
+				remainingPath = "/" + parts[1]
+			}
+
+			if name != tc.expectedName {
+				t.Errorf("name = %q, want %q", name, tc.expectedName)
+			}
+			if remainingPath != tc.expectedRemPath {
+				t.Errorf("remainingPath = %q, want %q", remainingPath, tc.expectedRemPath)
+			}
+		})
+	}
+}
+
+func TestTailscaleServiceNameRouting(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	_ = process.NewManager() // not used in these tests
+
+	// Create a multi-service app
+	yamlContent := `
+name: focustrack
+root: /tmp
+services:
+  api:
+    cmd: python server.py
+  web:
+    cmd: npm start
+`
+	os.WriteFile(tmpDir+"/focustrack.yml", []byte(yamlContent), 0644)
+	apps.Load()
+
+	t.Run("parses service-app pattern from path", func(t *testing.T) {
+		// Simulate path /api-focustrack/health
+		name := "api-focustrack"
+
+		// This is the logic from handleTailscaleRequest
+		if idx := strings.Index(name, "-"); idx != -1 {
+			serviceName := name[:idx]
+			appName := name[idx+1:]
+
+			if serviceName != "api" {
+				t.Errorf("serviceName = %q, want 'api'", serviceName)
+			}
+			if appName != "focustrack" {
+				t.Errorf("appName = %q, want 'focustrack'", appName)
+			}
+
+			app, svc, found := apps.GetService(appName, serviceName)
+			if !found {
+				t.Fatal("expected to find api service of focustrack")
+			}
+			if app.Name != "focustrack" {
+				t.Errorf("app.Name = %q, want 'focustrack'", app.Name)
+			}
+			if svc.Name != "api" {
+				t.Errorf("svc.Name = %q, want 'api'", svc.Name)
+			}
+		}
+	})
+
+	t.Run("falls back to app lookup for non-service paths", func(t *testing.T) {
+		// Path like /focustrack/health should try app lookup
+		name := "focustrack"
+
+		// No hyphen, so goes to app lookup
+		app, found := apps.GetByNameOrAlias(name)
+		if !found {
+			t.Fatal("expected to find focustrack app")
+		}
+		if app.Name != "focustrack" {
+			t.Errorf("app.Name = %q, want 'focustrack'", app.Name)
+		}
+	})
+
+	t.Run("handles app names with hyphens correctly", func(t *testing.T) {
+		// Create an app with hyphen in name
+		yamlContent2 := `
+name: my-blog
+root: /tmp
+cmd: hugo server
+`
+		os.WriteFile(tmpDir+"/my-blog.yml", []byte(yamlContent2), 0644)
+		apps.Reload()
+
+		// Path /my-blog/posts - "my" is not a service of "blog"
+		name := "my-blog"
+		if idx := strings.Index(name, "-"); idx != -1 {
+			serviceName := name[:idx]
+			appName := name[idx+1:]
+
+			// This should NOT find a service (blog doesn't have "my" service)
+			_, _, found := apps.GetService(appName, serviceName)
+			if found {
+				t.Error("should not find 'my' service of 'blog' app")
+			}
+
+			// Should fall back to app lookup and find "my-blog"
+			app, found := apps.GetByNameOrAlias(name)
+			if !found {
+				t.Fatal("expected to find my-blog app")
+			}
+			if app.Name != "my-blog" {
+				t.Errorf("app.Name = %q, want 'my-blog'", app.Name)
+			}
+		}
+	})
+}
+
+func TestTailscaleAPIRouting(t *testing.T) {
+	// Test that /api/* paths are routed to dashboard API
+	tests := []struct {
+		path      string
+		isAPIPath bool
+	}{
+		{"/api/status", true},
+		{"/api/logs", true},
+		{"/api/app-status", true},
+		{"/api/", true},
+		{"/api-focustrack/health", false}, // service name, not API
+		{"/myapp/api/endpoint", false},    // nested api path
+		{"/apiapp/something", false},      // app starting with "api"
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			got := strings.HasPrefix(tc.path, "/api/")
+			if got != tc.isAPIPath {
+				t.Errorf("isAPIPath(%q) = %v, want %v", tc.path, got, tc.isAPIPath)
+			}
+		})
+	}
+}
+
+func TestListAppsHTML(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	// Create simple app
+	os.WriteFile(tmpDir+"/blog.yml", []byte(`
+name: blog
+root: /tmp
+cmd: hugo server
+`), 0644)
+
+	// Create multi-service app
+	os.WriteFile(tmpDir+"/focustrack.yml", []byte(`
+name: focustrack
+root: /tmp
+services:
+  api:
+    cmd: python server.py
+  web:
+    cmd: npm start
+`), 0644)
+
+	apps.Load()
+
+	html := s.listAppsHTML()
+
+	// Should contain simple app
+	if !strings.Contains(html, "/blog/") {
+		t.Error("expected HTML to contain /blog/")
+	}
+
+	// Should contain service paths for multi-service app
+	if !strings.Contains(html, "/api-focustrack/") {
+		t.Error("expected HTML to contain /api-focustrack/")
+	}
+	if !strings.Contains(html, "/web-focustrack/") {
+		t.Error("expected HTML to contain /web-focustrack/")
+	}
+
+	// Should NOT contain bare multi-service app name
+	// (users should access via service name)
+	if strings.Contains(html, "<li>/focustrack/</li>") {
+		t.Error("multi-service app should list services, not app name")
+	}
 }

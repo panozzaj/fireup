@@ -170,6 +170,64 @@ TROUBLESHOOTING
         roost-dev automatically removes stale tmp/pids/server.pid files
         before starting Rails apps.
 
+TAILSCALE SERVE (REMOTE ACCESS)
+    roost-dev supports Tailscale Serve for accessing your local services
+    from other devices on your Tailnet (e.g., your phone).
+
+    SETUP
+        1. Install Tailscale and connect to your tailnet
+        2. Expose roost-dev via Tailscale Serve:
+               tailscale serve http://127.0.0.1:9280
+
+        3. Access from any device on your tailnet:
+               https://<machine-name>.<tailnet>.ts.net/<app-or-service>/
+
+    URL FORMAT
+        For simple apps:
+            https://macbook.tailnet.ts.net/blog/
+            https://macbook.tailnet.ts.net/blog/posts/123
+
+        For multi-service apps, use the service-app format:
+            https://macbook.tailnet.ts.net/api-myapp/
+            https://macbook.tailnet.ts.net/web-myapp/
+
+        The path prefix is stripped before routing to your service.
+
+    EXAMPLES
+        # Expose roost-dev (run on your laptop)
+        tailscale serve http://127.0.0.1:9280
+
+        # From your phone, access the api service of focustrack:
+        https://macbook-pro.tail094a69.ts.net/api-focustrack/health
+
+        # Access a simple app:
+        https://macbook-pro.tail094a69.ts.net/blog/
+
+    HOW IT WORKS
+        When roost-dev receives a request from a *.ts.net host:
+        1. It extracts the app/service name from the first path segment
+        2. For "service-app" patterns (e.g., api-myapp), routes to that service
+        3. For simple names (e.g., blog), it routes to the app
+        4. The path prefix is stripped before forwarding
+
+    INTERSTITIAL PAGES
+        When a service is starting, roost-dev shows an interstitial page that
+        polls for status. This works correctly over Tailscale - the page polls
+        the same Tailscale URL rather than the local .test domain.
+
+    RESERVED PATH PREFIXES
+        The following path prefixes are reserved and cannot be used as app names
+        when accessed via Tailscale:
+
+            /api/     - Dashboard API endpoints
+
+        If you have an app named "api", access it via the full service format
+        (e.g., /api-myapp/) or rename it.
+
+    STOPPING TAILSCALE SERVE
+        tailscale serve reset    # Remove all serve configurations
+        tailscale serve status   # View current configuration
+
 FILES
     ~/.config/roost-dev/           App configuration directory
     ~/.config/roost-dev/config.json   Global settings (TLD, etc.)

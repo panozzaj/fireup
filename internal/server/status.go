@@ -35,6 +35,21 @@ type appStatus struct {
 	Port        int             `json:"port,omitempty"`
 	Uptime      string          `json:"uptime,omitempty"`
 	Services    []serviceStatus `json:"services,omitempty"`
+	Warnings    []string        `json:"warnings,omitempty"`
+}
+
+// reservedTailscalePaths are path prefixes reserved for roost-dev internal use.
+// Apps/services with these names won't work correctly when accessed via Tailscale Serve.
+var reservedTailscalePaths = []string{"api"}
+
+// isReservedTailscalePath checks if a name conflicts with reserved Tailscale paths
+func isReservedTailscalePath(name string) bool {
+	for _, reserved := range reservedTailscalePaths {
+		if name == reserved {
+			return true
+		}
+	}
+	return false
 }
 
 // getStatus returns the current status of all apps as JSON
@@ -58,6 +73,18 @@ func (s *Server) getStatus() []byte {
 			Description: app.Description,
 			Aliases:     app.Aliases,
 			URL:         baseURL(app.Name),
+		}
+
+		// Check for reserved Tailscale path conflicts
+		if isReservedTailscalePath(app.Name) {
+			as.Warnings = append(as.Warnings,
+				fmt.Sprintf("App name '%s' conflicts with reserved Tailscale path. Won't work via Tailscale Serve.", app.Name))
+		}
+		for _, alias := range app.Aliases {
+			if isReservedTailscalePath(alias) {
+				as.Warnings = append(as.Warnings,
+					fmt.Sprintf("Alias '%s' conflicts with reserved Tailscale path. Won't work via Tailscale Serve.", alias))
+			}
 		}
 
 		switch app.Type {

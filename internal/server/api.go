@@ -206,6 +206,18 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(s.requestLog.Lines())
 
+	case "/api/debug-request":
+		// Debug endpoint to see incoming request details (useful for Tailscale Serve testing)
+		info := map[string]interface{}{
+			"host":       r.Host,
+			"url":        r.URL.String(),
+			"method":     r.Method,
+			"remoteAddr": r.RemoteAddr,
+			"headers":    map[string][]string(r.Header),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(info)
+
 	case "/api/app-status":
 		name := r.URL.Query().Get("name")
 		// Resolve alias to app name
