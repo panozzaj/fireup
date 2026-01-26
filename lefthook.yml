@@ -13,7 +13,7 @@ pre-commit:
 
         - name: go-test
           glob: '*.go'
-          run: GOPATH="" go test ./...
+          run: ./scripts/test.sh
 
         - name: docs-line-length
           glob: 'docs/*.txt'
