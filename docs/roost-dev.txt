@@ -103,15 +103,28 @@ URLS AND ROUTING
         http://api-myapp.test              -> myapp's api service
 
 COMMANDS
-    roost-dev serve           Start the server
-    roost-dev list            List apps and status
-    roost-dev start <name>    Start an app or service
-    roost-dev stop <name>     Stop an app or service
-    roost-dev restart <name>  Restart an app or service
-    roost-dev logs [name]     View logs (server logs if no name specified)
-    roost-dev status          Show component status
-    roost-dev setup           Interactive setup wizard
-    roost-dev docs            Show this documentation
+    APP STATUS
+        roost-dev status          List apps and their running status
+        roost-dev status --json   Output as JSON (same as /api/status)
+        roost-dev list            Alias for 'status'
+
+    APP CONTROL
+        roost-dev start <name>    Start an app or service
+        roost-dev stop <name>     Stop an app or service
+        roost-dev restart <name>  Restart an app or service
+        roost-dev logs [name]     View logs (server logs if no name specified)
+
+    SETUP
+        roost-dev setup           Interactive setup wizard
+        roost-dev setup status    Show component status (ports, cert, service)
+        roost-dev teardown        Remove all roost-dev configuration
+
+    ADVANCED
+        roost-dev serve           Start the server (usually runs as service)
+        roost-dev ports           Manage port forwarding
+        roost-dev cert            Manage HTTPS certificates
+        roost-dev service         Manage background service
+        roost-dev docs            Show this documentation
 
 SERVICE NAME FORMATS
     For start/stop/restart, you can target individual services:
@@ -149,7 +162,7 @@ TROUBLESHOOTING
         3. Ensure dependencies (node, ruby, etc.) are available
 
     "Connection refused" in browser
-        1. Check if roost-dev is running: roost-dev status
+        1. Check if roost-dev is running: roost-dev setup status
         2. Check if port forwarding is set up: roost-dev ports install
         3. Verify DNS: ping myapp.test (should resolve to 127.0.0.1)
 
