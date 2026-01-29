@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -145,20 +147,23 @@ roost-dev - Local development proxy for all your projects
 USAGE:
     roost-dev <command> [options]
 
-GETTING STARTED:
-    setup             Interactive setup wizard (ports + cert + service)
-    teardown          Remove all roost-dev configuration
-    status            Show status of all components
+APP STATUS:
+    status            Show configured apps and their status (--json for JSON)
+    list, ls          Alias for status
 
-APP MANAGEMENT:
-    serve             Start the roost-dev server
-    list, ls          List configured apps and their status
+APP CONTROL:
     start <app>       Start an app
     stop <app>        Stop an app
     restart <app>     Restart an app
     logs [app]        View server or app logs (-f to follow)
 
-COMPONENT MANAGEMENT:
+SETUP:
+    setup             Interactive setup wizard (ports + cert + service)
+    setup status      Show status of setup components
+    teardown          Remove all roost-dev configuration
+
+ADVANCED:
+    serve             Start the roost-dev server (usually runs as service)
     ports             Manage port forwarding (install/uninstall)
     cert              Manage HTTPS certificates (install/uninstall)
     service           Manage background service (install/uninstall)
@@ -381,6 +386,12 @@ Requires the roost-dev server to be running.
 
 // cmdSetup is the interactive setup wizard
 func cmdSetup(args []string) {
+	// Check for subcommands first
+	if len(args) > 0 && args[0] == "status" {
+		cmdSetupStatus(args[1:])
+		return
+	}
+
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 
 	var (
@@ -396,6 +407,7 @@ func cmdSetup(args []string) {
 
 USAGE:
     roost-dev setup [options]
+    roost-dev setup status    Show status of setup components
 
 OPTIONS:`)
 		fs.PrintDefaults()
@@ -426,6 +438,49 @@ DESCRIPTION:
 	fs.Parse(args)
 
 	runSetupWizard(configDir, tld)
+}
+
+// cmdSetupStatus shows status of setup components (ports, cert, service)
+func cmdSetupStatus(args []string) {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fmt.Println(`roost-dev setup status - Show status of setup components
+
+USAGE:
+    roost-dev setup status
+
+Shows the status of:
+- Port forwarding (ports 80/443)
+- HTTPS certificates
+- Background service`)
+			os.Exit(0)
+		}
+	}
+
+	runSetupComponentStatus()
+}
+
+// runSetupComponentStatus shows status of all setup components
+func runSetupComponentStatus() {
+	globalCfg, _ := getConfigWithDefaults()
+	tld := globalCfg.TLD
+
+	fmt.Println()
+	fmt.Println("roost-dev setup status")
+	fmt.Println("────────────────────────────────────────────────")
+
+	portsStatus, portsDetail := checkPortsStatus()
+	fmt.Printf("  Ports     %s  %s\n", portsStatus, portsDetail)
+
+	certStatus, certDetail := checkCertStatus()
+	fmt.Printf("  Cert      %s  %s\n", certStatus, certDetail)
+
+	serviceStatus, serviceDetail := checkServiceStatus()
+	fmt.Printf("  Service   %s  %s\n", serviceStatus, serviceDetail)
+
+	fmt.Println("────────────────────────────────────────────────")
+	fmt.Printf("  Dashboard: http://roost-dev.%s\n", tld)
+	fmt.Println()
 }
 
 // cmdTeardown removes all roost-dev configuration
@@ -465,24 +520,166 @@ DESCRIPTION:
 	runTeardownWizard(tld)
 }
 
-// cmdStatus shows overall status of all components
+// cmdStatus shows app status (replaces the old 'list' command behavior)
 func cmdStatus(args []string) {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Println(`roost-dev status - Show status of all components
+	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	jsonOutput := fs.Bool("json", false, "Output in JSON format")
+
+	fs.Usage = func() {
+		fmt.Println(`roost-dev status - Show status of configured apps
 
 USAGE:
-    roost-dev status
+    roost-dev status [options]
 
-Shows the status of:
-- Port forwarding (ports 80/443)
-- HTTPS certificates
-- Background service`)
+OPTIONS:`)
+		fs.PrintDefaults()
+		fmt.Println(`
+Shows all configured apps, their running status, and URLs.
+Use --json for machine-readable output (same as /api/status).
+
+For setup component status (ports, cert, service), use:
+    roost-dev setup status`)
+	}
+
+	// Check for help before parsing
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			fs.Usage()
 			os.Exit(0)
 		}
 	}
 
-	runOverallStatus()
+	fs.Parse(args)
+
+	if err := runStatus(*jsonOutput); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runStatus displays app status, optionally as JSON
+func runStatus(jsonOutput bool) error {
+	globalCfg, configDir := getConfigWithDefaults()
+
+	// Try to get status from running server
+	url := fmt.Sprintf("http://roost-dev.%s/api/status", globalCfg.TLD)
+	resp, err := http.Get(url)
+	if err != nil {
+		if jsonOutput {
+			// Return empty array for JSON when server not running
+			fmt.Println("[]")
+			return nil
+		}
+		// Server not running - fall back to listing config files
+		return listConfigFiles(configDir, globalCfg.TLD)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		if jsonOutput {
+			fmt.Println("[]")
+			return nil
+		}
+		return listConfigFiles(configDir, globalCfg.TLD)
+	}
+
+	// For JSON output, just pass through the API response
+	if jsonOutput {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %v", err)
+		}
+		fmt.Println(string(body))
+		return nil
+	}
+
+	// Parse and display formatted output
+	var apps []AppStatus
+	if err := json.NewDecoder(resp.Body).Decode(&apps); err != nil {
+		return fmt.Errorf("failed to parse status: %v", err)
+	}
+
+	if len(apps) == 0 {
+		fmt.Println("No apps configured.")
+		fmt.Printf("Add configs to %s\n", configDir)
+		return nil
+	}
+
+	// Print header
+	fmt.Printf("%-25s %-10s %s\n", "APP", "STATUS", "URL")
+	fmt.Printf("%-25s %-10s %s\n", strings.Repeat("-", 25), strings.Repeat("-", 10), strings.Repeat("-", 30))
+
+	for _, app := range apps {
+		var status string
+		if app.Type == "multi-service" {
+			runningCount := 0
+			for _, svc := range app.Services {
+				if svc.Running {
+					runningCount++
+				}
+			}
+			if runningCount == 0 {
+				status = "idle"
+			} else if runningCount == len(app.Services) {
+				status = "running"
+			} else {
+				status = fmt.Sprintf("%d/%d", runningCount, len(app.Services))
+			}
+		} else {
+			if app.Running {
+				status = "running"
+			} else {
+				status = "idle"
+			}
+		}
+
+		paddedStatus := fmt.Sprintf("%-10s", status)
+		switch {
+		case status == "running":
+			paddedStatus = colorGreen + paddedStatus + colorReset
+		case status == "idle":
+			paddedStatus = colorGray + paddedStatus + colorReset
+		case strings.Contains(status, "/"):
+			paddedStatus = colorYellow + paddedStatus + colorReset
+		}
+
+		name := app.Name
+		if len(app.Aliases) > 0 {
+			name = fmt.Sprintf("%s (%s)", app.Name, strings.Join(app.Aliases, ", "))
+		}
+		fmt.Printf("%-25s %s %s\n", name, paddedStatus, app.URL)
+
+		// Print services for multi-service apps
+		if app.Type == "multi-service" && len(app.Services) > 0 {
+			for i, svc := range app.Services {
+				var prefix string
+				if i == len(app.Services)-1 {
+					prefix = "└─"
+				} else {
+					prefix = "├─"
+				}
+
+				var svcStatus string
+				if svc.Running {
+					svcStatus = "running"
+				} else {
+					svcStatus = "idle"
+				}
+
+				svcPaddedStatus := fmt.Sprintf("%-10s", svcStatus)
+				if svcStatus == "running" {
+					svcPaddedStatus = colorGreen + svcPaddedStatus + colorReset
+				} else {
+					svcPaddedStatus = colorGray + svcPaddedStatus + colorReset
+				}
+
+				svcName := fmt.Sprintf("%s %s", prefix, svc.Name)
+				fmt.Printf("  %-23s %s %s\n", svcName, svcPaddedStatus, svc.URL)
+			}
+		}
+	}
+
+	return nil
 }
 
 func runCommand(cmd, appName string) error {
@@ -807,33 +1004,6 @@ func runTeardownWizard(tld string) {
 	fmt.Println("Teardown complete!")
 	fmt.Println()
 	fmt.Println("To reinstall, run: roost-dev setup")
-}
-
-// runOverallStatus shows status of all components
-func runOverallStatus() {
-	// Load TLD from config
-	globalCfg, _ := getConfigWithDefaults()
-	tld := globalCfg.TLD
-
-	fmt.Println()
-	fmt.Println("roost-dev status")
-	fmt.Println("────────────────────────────────────────────────")
-
-	// Check ports
-	portsStatus, portsDetail := checkPortsStatus()
-	fmt.Printf("  Ports     %s  %s\n", portsStatus, portsDetail)
-
-	// Check cert
-	certStatus, certDetail := checkCertStatus()
-	fmt.Printf("  Cert      %s  %s\n", certStatus, certDetail)
-
-	// Check service
-	serviceStatus, serviceDetail := checkServiceStatus()
-	fmt.Printf("  Service   %s  %s\n", serviceStatus, serviceDetail)
-
-	fmt.Println("────────────────────────────────────────────────")
-	fmt.Printf("  Dashboard: http://roost-dev.%s\n", tld)
-	fmt.Println()
 }
 
 // checkPortsStatus returns the status of port forwarding
