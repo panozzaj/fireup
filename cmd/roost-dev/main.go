@@ -300,8 +300,9 @@ CONFIGURATION:
 
 	go func() {
 		<-sigCh
-		fmt.Println("\nShutting down...")
+		fmt.Println("\n[roost-dev] Received shutdown signal, stopping all processes...")
 		srv.Shutdown()
+		fmt.Println("[roost-dev] Shutdown complete")
 		os.Exit(0)
 	}()
 

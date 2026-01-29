@@ -593,23 +593,75 @@ func (m *Manager) Stop(name string) error {
 // Kill terminates the process and all its children
 func (p *Process) Kill() {
 	p.mu.Lock()
+	var pid int
 	var pgid int
+	var hasPid bool
 	var hasPgid bool
 	if p.cmd != nil && p.cmd.Process != nil {
+		pid = p.cmd.Process.Pid
+		hasPid = true
 		var err error
-		pgid, err = syscall.Getpgid(p.cmd.Process.Pid)
-		hasPgid = err == nil
+		pgid, err = syscall.Getpgid(pid)
+		if err != nil {
+			fmt.Printf("[roost-dev] Kill %s: Getpgid(%d) failed: %v\n", p.Name, pid, err)
+		} else {
+			hasPgid = true
+		}
 	}
 	p.mu.Unlock()
 
 	if hasPgid {
 		// Kill the entire process group
-		syscall.Kill(-pgid, syscall.SIGTERM)
+		fmt.Printf("[roost-dev] Kill %s: sending SIGTERM to process group -%d\n", p.Name, pgid)
+		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+			fmt.Printf("[roost-dev] Kill %s: SIGTERM to group -%d failed: %v\n", p.Name, pgid, err)
+		}
 		// Give it a moment to clean up, then force kill
 		time.Sleep(100 * time.Millisecond)
-		syscall.Kill(-pgid, syscall.SIGKILL)
+		fmt.Printf("[roost-dev] Kill %s: sending SIGKILL to process group -%d\n", p.Name, pgid)
+		if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
+			fmt.Printf("[roost-dev] Kill %s: SIGKILL to group -%d failed: %v\n", p.Name, pgid, err)
+		}
+	} else if hasPid {
+		// Fallback: kill by PID if we couldn't get PGID
+		fmt.Printf("[roost-dev] Kill %s: falling back to PID kill for %d\n", p.Name, pid)
+		syscall.Kill(pid, syscall.SIGTERM)
+		time.Sleep(100 * time.Millisecond)
+		syscall.Kill(pid, syscall.SIGKILL)
 	}
+
+	// Also kill any child processes we can find (belt and suspenders)
+	if hasPid {
+		killChildProcesses(pid, p.Name)
+	}
+
 	p.cancel()
+}
+
+// killChildProcesses finds and kills all child processes of the given PID
+func killChildProcesses(parentPid int, name string) {
+	// Use pgrep to find children (works on macOS and Linux)
+	cmd := exec.Command("pgrep", "-P", strconv.Itoa(parentPid))
+	output, err := cmd.Output()
+	if err != nil {
+		// No children found or pgrep failed - that's fine
+		return
+	}
+
+	childPids := strings.Fields(string(output))
+	for _, pidStr := range childPids {
+		childPid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("[roost-dev] Kill %s: killing orphaned child PID %d\n", name, childPid)
+		// Recursively kill grandchildren first
+		killChildProcesses(childPid, name)
+		// Then kill this child
+		syscall.Kill(childPid, syscall.SIGTERM)
+		time.Sleep(50 * time.Millisecond)
+		syscall.Kill(childPid, syscall.SIGKILL)
+	}
 }
 
 // Restart restarts a process
@@ -687,10 +739,18 @@ func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if len(m.processes) == 0 {
+		fmt.Println("[roost-dev] StopAll: no processes to stop")
+		return
+	}
+
+	fmt.Printf("[roost-dev] StopAll: stopping %d processes\n", len(m.processes))
 	for name, proc := range m.processes {
+		fmt.Printf("[roost-dev] StopAll: stopping %s\n", name)
 		proc.Kill()
 		delete(m.processes, name)
 	}
+	fmt.Println("[roost-dev] StopAll: all processes stopped")
 }
 
 // IsRunning returns true if the process is still running

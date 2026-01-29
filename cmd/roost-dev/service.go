@@ -149,6 +149,8 @@ func generateServicePlistContent() (string, error) {
 	envSection.WriteString("    </dict>\n")
 
 	// Generate plist content
+	// ExitTimeOut gives roost-dev time to gracefully stop all child processes
+	// before launchd sends SIGKILL (default is 20 seconds, we use 30)
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -164,6 +166,8 @@ func generateServicePlistContent() (string, error) {
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
     <key>StandardOutPath</key>
     <string>%s/stdout.log</string>
     <key>StandardErrorPath</key>

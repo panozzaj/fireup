@@ -249,16 +249,20 @@ func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager, ho
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown() {
+	fmt.Println("[roost-dev] Shutdown: stopping config watcher...")
 	if s.configWatcher != nil {
 		s.configWatcher.Stop()
 	}
+	fmt.Println("[roost-dev] Shutdown: stopping all processes...")
 	s.procs.StopAll()
+	fmt.Println("[roost-dev] Shutdown: closing HTTP servers...")
 	if s.httpSrv != nil {
 		s.httpSrv.Close()
 	}
 	if s.httpsSrv != nil {
 		s.httpsSrv.Close()
 	}
+	fmt.Println("[roost-dev] Shutdown: done")
 }
 
 // logRequest logs a request handling event
