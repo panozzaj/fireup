@@ -325,6 +325,10 @@ func (s *Server) handleAppStatus(w http.ResponseWriter, r *http.Request) {
 		if serviceName, appName, ok := parseServiceName(name); ok {
 			if app, svc, found := s.apps.GetService(appName, serviceName); found {
 				for _, depName := range svc.DependsOn {
+					// Skip dependencies that no longer exist in config
+					if _, depSvc, depFound := s.apps.GetService(appName, depName); !depFound || depSvc == nil {
+						continue
+					}
 					depProcName := fmt.Sprintf("%s-%s", depName, app.Name)
 					depProc, found := s.procs.Get(depProcName)
 					if !found {

@@ -173,7 +173,22 @@ function poll() {
                 return
             } else if (status.status === 'failed') {
                 showError(status.error)
+                // Keep polling slower to detect external restarts
+                setTimeout(poll, 2000)
                 return
+            } else if (status.status === 'starting') {
+                // Service was restarted externally - update UI
+                if (failed) {
+                    failed = false
+                    lastLogCount = 0
+                    document.getElementById('status').textContent = 'Starting...'
+                    document.getElementById('status').classList.remove('error')
+                    document.getElementById('spinner').style.display = 'block'
+                    document.getElementById('spinner').style.borderTopColor = ''
+                    document.getElementById('retry-btn').style.display = 'none'
+                    document.getElementById('fix-btn').style.display = 'none'
+                    document.getElementById('logs-content').innerHTML = '<span class="logs-empty">Restarting...</span>'
+                }
             }
             setTimeout(poll, 200)
         })
@@ -411,6 +426,8 @@ if (failed) {
                 showButtons()
                 analyzeLogsWithAI(lines)
             }
+            // Start polling to detect external restarts (slower interval for failed state)
+            setTimeout(poll, 2000)
         })
 } else {
     poll()
