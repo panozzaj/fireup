@@ -1,4 +1,4 @@
-# roost-dev
+# fireup
 
 A local development proxy for all your projects.
 
@@ -17,7 +17,7 @@ A local development proxy for all your projects.
 
 ## Video demo
 
-Here's a 5 minute demo of roost-dev in action:
+Here's a 5 minute demo of fireup in action:
 
 https://github.com/user-attachments/assets/c292a101-04b7-4fa7-80b9-abe0ac859d1b
 
@@ -26,34 +26,34 @@ https://github.com/user-attachments/assets/c292a101-04b7-4fa7-80b9-abe0ac859d1b
 Requires Go 1.21+.
 
 ```bash
-go install github.com/panozzaj/roost-dev/cmd/roost-dev@latest
+go install github.com/panozzaj/fireup/cmd/fireup@latest
 ```
 
-This installs the `roost-dev` binary to your `$GOPATH/bin` (usually `~/go/bin`). Make sure this is in your PATH.
+This installs the `fireup` binary to your `$GOPATH/bin` (usually `~/go/bin`). Make sure this is in your PATH.
 
 (I'm not super familiar with the Golang ecosystem, so if there's a better way to distribute this package or you run into issues, please open an issue or PR.)
 
 ## Quick Start
 
 ```bash
-roost-dev setup
+fireup setup
 ```
 
-Then visit **http://roost-dev.test** to see the dashboard.
+Then visit **http://fireup.test** to see the dashboard.
 
 ## Configuration
 
-Place service config files in `~/.config/roost-dev/`. Unless specified otherwise, the filename (without extension) is the app name and domain.
+Place service config files in `~/.config/fireup/`. Unless specified otherwise, the filename (without extension) is the app name and domain.
 
 ### YAML config (recommended)
 
 ```yaml
-# ~/.config/roost-dev/myproject.yml
+# ~/.config/fireup/myproject.yml
 root: ~/projects/myproject
 cmd: bin/rails server -p $PORT -b 127.0.0.1
 ```
 
-Your command receives the port via `$PORT` environment variable. roost-dev dynamically assigns ports, avoiding conflicts between apps.
+Your command receives the port via `$PORT` environment variable. fireup dynamically assigns ports, avoiding conflicts between apps.
 
 Optional fields:
 
@@ -88,13 +88,13 @@ Services with `depends_on` will automatically start their dependencies first.
 Some tools need multiple ports (e.g., Jekyll with livereload). Use shell arithmetic on `$PORT`:
 
 ```yaml
-# ~/.config/roost-dev/blog.yml
+# ~/.config/fireup/blog.yml
 name: blog
 root: ~/projects/blog
 cmd: bundle exec jekyll serve --port $PORT --host 127.0.0.1 --livereload-port $((PORT + 1)) --watch
 ```
 
-Note: Port numbers must be under 65535, so keep offsets small when roost-dev assigns high ports (50000+).
+Note: Port numbers must be under 65535, so keep offsets small when fireup assigns high ports (50000+).
 
 We may add first-class multi-port feature later.
 
@@ -103,14 +103,14 @@ We may add first-class multi-port feature later.
 For serving static files, use a symlink to the directory:
 
 ```bash
-ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+ln -s ~/projects/my-site ~/.config/fireup/mysite
 # Serves files from ~/projects/my-site at http://mysite.test
 ```
 
 Or in YAML:
 
 ```yaml
-# ~/.config/roost-dev/mysite.yml
+# ~/.config/fireup/mysite.yml
 root: ~/projects/my-site
 static: true
 ```
@@ -120,7 +120,7 @@ static: true
 If you're already running a server on a fixed port:
 
 ```bash
-echo "3000" > ~/.config/roost-dev/myapp
+echo "3000" > ~/.config/fireup/myapp
 # Proxies http://myapp.test to localhost:3000
 ```
 
@@ -141,16 +141,16 @@ Your app reads the `Host` header to determine the subdomain.
 The default TLD is `.test`. To use a different one (e.g., `.dev`):
 
 ```bash
-sudo roost-dev install --tld dev
-roost-dev serve --tld dev
+sudo fireup install --tld dev
+fireup serve --tld dev
 # Visit http://myapp.dev
 ```
 
 ## CLI Commands
 
-See `roost-dev --help` for a list of commands.
+See `fireup --help` for a list of commands.
 
-Run `roost-dev <command> --help` for command-specific options.
+Run `fireup <command> --help` for command-specific options.
 
 ## Known Issues
 
@@ -160,14 +160,14 @@ Run `roost-dev <command> --help` for command-specific options.
 ### Docker Desktop
 
 > [!CAUTION]
-> Docker Desktop on macOS is not currently compatible with roost-dev's port forwarding.
+> Docker Desktop on macOS is not currently compatible with fireup's port forwarding.
 
-Both Docker Desktop and roost-dev use macOS's `pf` (packet filter) for port redirection. When Docker starts or restarts, it clears roost-dev's pf rules, breaking access to `*.test` domains.
+Both Docker Desktop and fireup use macOS's `pf` (packet filter) for port redirection. When Docker starts or restarts, it clears fireup's pf rules, breaking access to `*.test` domains.
 
 **Workaround:** After starting Docker Desktop, re-run:
 
 ```bash
-roost-dev ports install
+fireup ports install
 ```
 
 **Alternative:** Access apps directly via `localhost:9280` instead of `*.test` domains.
@@ -176,17 +176,17 @@ Pull requests to improve Docker compatibility are welcome.
 
 ## Claude Code Integration
 
-If you use [Claude Code](https://github.com/anthropics/claude-code), you can install the `/roost-dev` slash command to help set up roost-dev configurations for your projects:
+If you use [Claude Code](https://github.com/anthropics/claude-code), you can install the `/fireup` slash command to help set up fireup configurations for your projects:
 
 ```bash
 # Create the commands directory if it doesn't exist
 mkdir -p ~/.claude/commands
 
-# Symlink the command (adjust the path to where you cloned roost-dev)
-ln -s /path/to/roost-dev/.claude/commands/roost-dev.md ~/.claude/commands/roost-dev.md
+# Symlink the command (adjust the path to where you cloned fireup)
+ln -s /path/to/fireup/.claude/commands/fireup.md ~/.claude/commands/fireup.md
 ```
 
-Then in any project, run `/roost-dev` in Claude Code to get help setting up roost-dev for that project.
+Then in any project, run `/fireup` in Claude Code to get help setting up fireup for that project.
 
 ## Status
 

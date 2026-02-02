@@ -179,7 +179,7 @@ func TestProcessStates(t *testing.T) {
 func TestStartAsyncWithMissingDirectory(t *testing.T) {
 	t.Run("fails when directory does not exist", func(t *testing.T) {
 		m := NewManager()
-		nonExistentDir := "/tmp/roost-dev-test-nonexistent-dir-12345"
+		nonExistentDir := "/tmp/fireup-test-nonexistent-dir-12345"
 
 		proc, err := m.StartAsync("test-missing-dir", "echo hello", nonExistentDir, nil)
 		if err != nil {

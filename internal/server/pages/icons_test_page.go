@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/styles"
+	"github.com/panozzaj/fireup/internal/styles"
 )
 
 // iconsTestData holds data for the icons test page template
@@ -17,7 +17,7 @@ var iconsTestTmpl = template.Must(template.New("icons-test").Parse(`<!DOCTYPE ht
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Icon Test Page - roost-dev</title>
+    <title>Icon Test Page - fireup</title>
 {{.ThemeScript}}
     <style>
 {{.ThemeCSS}}
@@ -140,7 +140,7 @@ h3 { color: var(--text-secondary); margin-top: 24px; margin-bottom: 12px; font-s
 </head>
 <body>
     <h1>Icon Test Page</h1>
-    <p class="subtitle">Preview icon options for roost-dev UI buttons</p>
+    <p class="subtitle">Preview icon options for fireup UI buttons</p>
 
     <h2>Claude Brand Colors</h2>
     <div>
@@ -677,7 +677,7 @@ h3 { color: var(--text-secondary); margin-top: 24px; margin-bottom: 12px; font-s
     <div class="notes" style="background: var(--bg-card);">
         <p style="margin-bottom: 16px;"><strong>Example dropdown layout:</strong></p>
         <div style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-            <span style="font-size: 18px; font-weight: 600;">forever-start.roost-dev</span>
+            <span style="font-size: 18px; font-weight: 600;">forever-start.fireup</span>
             <button class="btn btn-icon-only" data-tooltip="Settings" style="padding: 4px;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                     <circle cx="12" cy="12" r="1"></circle>
@@ -688,7 +688,7 @@ h3 { color: var(--text-secondary); margin-top: 24px; margin-bottom: 12px; font-s
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; display: inline-block;">
             <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
-                <span style="font-family: monospace; font-size: 13px; color: var(--text-secondary);">roost-dev-tests.yml</span>
+                <span style="font-family: monospace; font-size: 13px; color: var(--text-secondary);">fireup-tests.yml</span>
                 <button class="btn btn-icon-only" data-tooltip="Copy path" style="padding: 4px;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -722,7 +722,7 @@ h3 { color: var(--text-secondary); margin-top: 24px; margin-bottom: 12px; font-s
         </ul>
         <p><strong>LLM Features:</strong></p>
         <ul>
-            <li>"Copy for agent" and "Fix with Claude Code" should include instructions to run <code>roost-dev --help</code> so the LLM can learn how to use roost-dev CLI</li>
+            <li>"Copy for agent" and "Fix with Claude Code" should include instructions to run <code>fireup --help</code> so the LLM can learn how to use fireup CLI</li>
             <li>This helps agents understand available commands like restart, stop, logs, etc.</li>
         </ul>
     </div>

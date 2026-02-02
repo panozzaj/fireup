@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/diff"
+	"github.com/panozzaj/fireup/internal/diff"
 )
 
 func cmdService(args []string) {
@@ -38,34 +38,34 @@ func cmdService(args []string) {
 }
 
 func printServiceUsage() {
-	fmt.Println(`roost-dev service - Manage roost-dev as a background service
+	fmt.Println(`fireup service - Manage fireup as a background service
 
 USAGE:
-    roost-dev service <command>
+    fireup service <command>
 
 COMMANDS:
-    install     Install and start roost-dev as a LaunchAgent (runs on login)
+    install     Install and start fireup as a LaunchAgent (runs on login)
     uninstall   Stop and remove the LaunchAgent
     status      Show service status
 
 DESCRIPTION:
-    Sets up roost-dev to run automatically in the background via macOS LaunchAgent.
+    Sets up fireup to run automatically in the background via macOS LaunchAgent.
     The service will start on login and restart automatically if it crashes.
 
 EXAMPLES:
-    roost-dev service install     # Start running in background
-    roost-dev service status      # Check if it's running
-    roost-dev service uninstall   # Stop background service`)
+    fireup service install     # Start running in background
+    fireup service status      # Check if it's running
+    fireup service uninstall   # Stop background service`)
 }
 
 func cmdServiceInstall(args []string) {
-	if checkHelpFlag(args, `roost-dev service install - Install roost-dev as a background service
+	if checkHelpFlag(args, `fireup service install - Install fireup as a background service
 
 USAGE:
-    roost-dev service install
+    fireup service install
 
-Installs a LaunchAgent that runs 'roost-dev serve' automatically on login.
-Logs are written to ~/Library/Logs/roost-dev/`) {
+Installs a LaunchAgent that runs 'fireup serve' automatically on login.
+Logs are written to ~/Library/Logs/fireup/`) {
 		os.Exit(0)
 	}
 
@@ -75,12 +75,12 @@ Logs are written to ~/Library/Logs/roost-dev/`) {
 }
 
 func cmdServiceUninstall(args []string) {
-	if checkHelpFlag(args, `roost-dev service uninstall - Remove roost-dev background service
+	if checkHelpFlag(args, `fireup service uninstall - Remove fireup background service
 
 USAGE:
-    roost-dev service uninstall
+    fireup service uninstall
 
-Stops roost-dev and removes the LaunchAgent.`) {
+Stops fireup and removes the LaunchAgent.`) {
 		os.Exit(0)
 	}
 
@@ -90,10 +90,10 @@ Stops roost-dev and removes the LaunchAgent.`) {
 }
 
 func cmdServiceStatus(args []string) {
-	if checkHelpFlag(args, `roost-dev service status - Show service status
+	if checkHelpFlag(args, `fireup service status - Show service status
 
 USAGE:
-    roost-dev service status
+    fireup service status
 
 Shows whether the LaunchAgent is installed and running.`) {
 		os.Exit(0)
@@ -104,20 +104,20 @@ Shows whether the LaunchAgent is installed and running.`) {
 
 func getUserLaunchAgentPath() string {
 	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, "Library", "LaunchAgents", "com.roost-dev.plist")
+	return filepath.Join(homeDir, "Library", "LaunchAgents", "com.fireup.plist")
 }
 
 // generateServicePlistContent generates the LaunchAgent plist content.
 // This is extracted so the same content generation is used for both preview and execution.
 func generateServicePlistContent() (string, error) {
 	homeDir, _ := os.UserHomeDir()
-	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
+	logsDir := filepath.Join(homeDir, "Library", "Logs", "fireup")
 
-	// Find roost-dev binary
-	binaryPath, err := exec.LookPath("roost-dev")
+	// Find fireup binary
+	binaryPath, err := exec.LookPath("fireup")
 	if err != nil {
 		// Fall back to go/bin
-		binaryPath = filepath.Join(homeDir, "go", "bin", "roost-dev")
+		binaryPath = filepath.Join(homeDir, "go", "bin", "fireup")
 	}
 
 	// Build environment variables section
@@ -149,14 +149,14 @@ func generateServicePlistContent() (string, error) {
 	envSection.WriteString("    </dict>\n")
 
 	// Generate plist content
-	// ExitTimeOut gives roost-dev time to gracefully stop all child processes
+	// ExitTimeOut gives fireup time to gracefully stop all child processes
 	// before launchd sends SIGKILL (default is 20 seconds, we use 30)
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.roost-dev</string>
+    <string>com.fireup</string>
     <key>ProgramArguments</key>
     <array>
         <string>%s</string>
@@ -196,12 +196,12 @@ func runServiceInstall() error {
 	// LaunchAgents must be installed as the user, not root
 	// Even with SUDO_UID, root can't bootstrap into another user's GUI domain
 	if os.Geteuid() == 0 {
-		return fmt.Errorf("cannot install user LaunchAgent as root; run 'roost-dev service install' without sudo")
+		return fmt.Errorf("cannot install user LaunchAgent as root; run 'fireup service install' without sudo")
 	}
 
 	homeDir, _ := os.UserHomeDir()
 	plistPath := getUserLaunchAgentPath()
-	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
+	logsDir := filepath.Join(homeDir, "Library", "Logs", "fireup")
 
 	// Show summary and confirm (? shows full diff)
 	plan := serviceInstallPlan()
@@ -226,7 +226,7 @@ func runServiceInstall() error {
 	}
 
 	// Unload if already loaded (ignore errors)
-	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid())).Run()
+	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.fireup", os.Getuid())).Run()
 
 	// Load the agent
 	fmt.Println("Loading LaunchAgent...")
@@ -238,7 +238,7 @@ func runServiceInstall() error {
 	fmt.Println()
 	fmt.Println("Service installed successfully!")
 	fmt.Println()
-	fmt.Printf("roost-dev is now running in the background.\n")
+	fmt.Printf("fireup is now running in the background.\n")
 	fmt.Printf("Logs: %s/\n", logsDir)
 	fmt.Println()
 	fmt.Println("The service will start automatically on login.")
@@ -262,7 +262,7 @@ func runServiceUninstall() error {
 	}
 
 	// Unload the agent (ignore errors - may not be running)
-	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid())).Run()
+	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.fireup", os.Getuid())).Run()
 
 	// Execute the plan for file deletion
 	if err := plan.Execute(); err != nil {
@@ -280,7 +280,7 @@ func runServiceStatus() {
 	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
 		fmt.Println("Service: not installed")
 		fmt.Println()
-		fmt.Println("Run 'roost-dev service install' to set up background service.")
+		fmt.Println("Run 'fireup service install' to set up background service.")
 		return
 	}
 
@@ -288,7 +288,7 @@ func runServiceStatus() {
 	fmt.Printf("Plist: %s\n", plistPath)
 
 	// Check if running via launchctl
-	cmd := exec.Command("launchctl", "print", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid()))
+	cmd := exec.Command("launchctl", "print", fmt.Sprintf("gui/%d/com.fireup", os.Getuid()))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Println("Status: not running")
@@ -308,6 +308,6 @@ func runServiceStatus() {
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	logsDir := filepath.Join(homeDir, "Library", "Logs", "roost-dev")
+	logsDir := filepath.Join(homeDir, "Library", "Logs", "fireup")
 	fmt.Printf("Logs: %s/\n", logsDir)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/panozzaj/roost-dev/internal/config"
+	"github.com/panozzaj/fireup/internal/config"
 )
 
 // serviceStatus represents the status of a single service
@@ -38,7 +38,7 @@ type appStatus struct {
 	Warnings    []string        `json:"warnings,omitempty"`
 }
 
-// reservedTailscalePaths are path prefixes reserved for roost-dev internal use.
+// reservedTailscalePaths are path prefixes reserved for fireup internal use.
 // Apps/services with these names won't work correctly when accessed via Tailscale Serve.
 var reservedTailscalePaths = []string{"api"}
 
@@ -120,8 +120,8 @@ func (s *Server) getStatus() []byte {
 				ss := serviceStatus{Name: svc.Name, Default: svc.Default}
 				procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
 				// Set service URL
-				if app.Name == "roost-dev-tests" {
-					ss.URL = fmt.Sprintf("http://%s.roost-dev.%s", svc.Name, s.cfg.TLD)
+				if app.Name == "fireup-tests" {
+					ss.URL = fmt.Sprintf("http://%s.fireup.%s", svc.Name, s.cfg.TLD)
 				} else if svc.Default {
 					ss.URL = baseURL(app.Name)
 				} else {

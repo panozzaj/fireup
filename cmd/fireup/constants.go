@@ -1,8 +1,8 @@
 package main
 
 const (
-	pfAnchorPath     = "/etc/pf.anchors/roost-dev"
-	launchdPlistPath = "/Library/LaunchDaemons/dev.roost.pfctl.plist"
+	pfAnchorPath     = "/etc/pf.anchors/fireup"
+	launchdPlistPath = "/Library/LaunchDaemons/dev.fireup.pfctl.plist"
 
 	// expectedPfPlistContent is the expected content of the pf LaunchDaemon plist.
 	// Used by both isPfPlistOutdated() and runPortsInstall() to stay in sync.
@@ -11,7 +11,7 @@ const (
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>dev.roost.pfctl</string>
+    <string>dev.fireup.pfctl</string>
     <key>ProgramArguments</key>
     <array>
         <string>/sbin/pfctl</string>

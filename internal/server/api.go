@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/config"
-	"github.com/panozzaj/roost-dev/internal/server/pages"
-	"github.com/panozzaj/roost-dev/internal/ui"
+	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/server/pages"
+	"github.com/panozzaj/fireup/internal/ui"
 )
 
 // parseServiceName parses a name in "service-app" format.
@@ -91,7 +91,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.handleLogs(w, r)
 
 	case "/api/server-logs":
-		// Return roost-dev's request handling logs
+		// Return fireup's request handling logs
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(s.requestLog.Lines())
 
@@ -456,17 +456,17 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 	// Check if claude command is configured (read fresh from config.json)
 	claudeCmd := s.getClaudeCommand()
 	if claudeCmd == "" {
-		http.Error(w, "claude command not configured in ~/.config/roost-dev/config.json", http.StatusBadRequest)
+		http.Error(w, "claude command not configured in ~/.config/fireup/config.json", http.StatusBadRequest)
 		return
 	}
 
-	// Build the prompt for Claude Code with roost-dev context
+	// Build the prompt for Claude Code with fireup context
 	logsText := strings.Join(logs, "\n")
-	prompt := fmt.Sprintf(`The roost-dev app %q failed to start.
+	prompt := fmt.Sprintf(`The fireup app %q failed to start.
 
-## About roost-dev
-roost-dev is a local development server that manages apps via config files in ~/.config/roost-dev/.
-Config file for this app: ~/.config/roost-dev/%s.yml
+## About fireup
+fireup is a local development server that manages apps via config files in ~/.config/fireup/.
+Config file for this app: ~/.config/fireup/%s.yml
 
 ## Logs
 `+"```"+`
@@ -474,16 +474,16 @@ Config file for this app: ~/.config/roost-dev/%s.yml
 `+"```"+`
 
 ## Useful commands
-  roost-dev restart %s  # Restart this app
-  roost-dev logs %s     # View logs
-  roost-dev --help      # CLI help
-  roost-dev docs        # Full documentation
+  fireup restart %s  # Restart this app
+  fireup logs %s     # View logs
+  fireup --help      # CLI help
+  fireup docs        # Full documentation
 
 Please help me fix this error. After fixing, restart the app and verify it starts successfully.`,
 		name, name, logsText, name, name)
 
 	// Write prompt to a temp file to avoid shell escaping issues
-	tmpFile, err := os.CreateTemp("", "roost-dev-prompt-*.txt")
+	tmpFile, err := os.CreateTemp("", "fireup-prompt-*.txt")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to create temp file: %v", err), http.StatusInternalServerError)
 		return
@@ -587,7 +587,7 @@ func (s *Server) handleOpenConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleWelcome serves the built-in welcome/test page at roost-test.<tld>
+// handleWelcome serves the built-in welcome/test page at fireup-test.<tld>
 func (s *Server) handleWelcome(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(pages.Welcome(s.cfg.TLD, s.cfg.Dir, s.getTheme())))

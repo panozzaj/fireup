@@ -5,9 +5,9 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/icons"
-	"github.com/panozzaj/roost-dev/internal/logo"
-	"github.com/panozzaj/roost-dev/internal/styles"
+	"github.com/panozzaj/fireup/internal/icons"
+	"github.com/panozzaj/fireup/internal/logo"
+	"github.com/panozzaj/fireup/internal/styles"
 )
 
 //go:embed interstitial.css
@@ -18,9 +18,9 @@ var interstitialJS string
 
 // interstitialData holds data for the interstitial page template
 type interstitialData struct {
-	AppName     string // Process name used for API calls (e.g., "forever-start-roost-dev-tests")
-	DisplayName string // Display name with dots (e.g., "forever-start.roost-dev-tests")
-	ConfigName  string // Config file name (e.g., "roost-dev-tests")
+	AppName     string // Process name used for API calls (e.g., "forever-start-fireup-tests")
+	DisplayName string // Display name with dots (e.g., "forever-start.fireup-tests")
+	ConfigName  string // Config file name (e.g., "fireup-tests")
 	TLD         string
 	StatusText  string
 	Failed      bool
@@ -55,7 +55,7 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
 </head>
 <body>
     <div class="container" data-error="{{.ErrorMsg}}" data-app="{{.AppName}}" data-display="{{.DisplayName}}" data-config="{{.ConfigName}}" data-tld="{{.TLD}}" data-failed="{{.Failed}}">
-        <div class="logo"><a href="//roost-dev.{{.TLD}}/">{{.Logo}}</a></div>
+        <div class="logo"><a href="//fireup.{{.TLD}}/">{{.Logo}}</a></div>
         <div class="title-row">
             <h1>{{.DisplayName}}</h1>
             <div class="settings-dropdown">
@@ -91,9 +91,9 @@ var interstitialTmpl = template.Must(template.New("interstitial").Parse(`<!DOCTY
 `))
 
 // Interstitial renders the interstitial page
-// appName: process name for API calls (e.g., "forever-start-roost-dev-tests")
-// displayName: display name with dots (e.g., "forever-start.roost-dev-tests")
-// configName: config file name (e.g., "roost-dev-tests")
+// appName: process name for API calls (e.g., "forever-start-fireup-tests")
+// displayName: display name with dots (e.g., "forever-start.fireup-tests")
+// configName: config file name (e.g., "fireup-tests")
 func Interstitial(appName, displayName, configName, tld, theme string, failed bool, errorMsg string) string {
 	statusText := "Starting"
 	if failed {

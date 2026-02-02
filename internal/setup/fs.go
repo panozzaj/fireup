@@ -48,7 +48,7 @@ func (OSFileSystem) UserHomeDir() (string, error) {
 	return os.UserHomeDir()
 }
 
-// Checker verifies installation status of roost-dev components.
+// Checker verifies installation status of fireup components.
 type Checker struct {
 	FS FileSystem
 }
@@ -60,10 +60,10 @@ func NewChecker() *Checker {
 
 // IsPortForwardingInstalled checks if port forwarding appears to be set up.
 func (c *Checker) IsPortForwardingInstalled(tld string) bool {
-	if _, err := c.FS.Stat("/etc/pf.anchors/roost-dev"); err != nil {
+	if _, err := c.FS.Stat("/etc/pf.anchors/fireup"); err != nil {
 		return false
 	}
-	if _, err := c.FS.Stat("/Library/LaunchDaemons/dev.roost.pfctl.plist"); err != nil {
+	if _, err := c.FS.Stat("/Library/LaunchDaemons/dev.fireup.pfctl.plist"); err != nil {
 		return false
 	}
 	resolverPath := "/etc/resolver/" + tld
@@ -90,7 +90,7 @@ func (c *Checker) IsCertInstalled(configDir string) bool {
 // Note: This only checks for the plist file, not if the service is running
 // (running status requires exec.Command which is not abstracted here).
 func (c *Checker) IsServiceInstalled(homeDir string) bool {
-	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.roost-dev.plist")
+	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.fireup.plist")
 	if _, err := c.FS.Stat(plistPath); err != nil {
 		return false
 	}

@@ -152,7 +152,7 @@ func (m *Manager) findFreePort() (int, error) {
 
 		// Skip ports we've already reserved for other processes
 		if m.reservedPorts[port] {
-			fmt.Printf("[roost-dev] Port %d is reserved, skipping\n", port)
+			fmt.Printf("[fireup] Port %d is reserved, skipping\n", port)
 			continue
 		}
 
@@ -161,7 +161,7 @@ func (m *Manager) findFreePort() (int, error) {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 50*time.Millisecond)
 		if err == nil {
 			conn.Close()
-			fmt.Printf("[roost-dev] Port %d has something listening, skipping\n", port)
+			fmt.Printf("[fireup] Port %d has something listening, skipping\n", port)
 			continue
 		}
 
@@ -169,7 +169,7 @@ func (m *Manager) findFreePort() (int, error) {
 		conn, err = net.DialTimeout("tcp", fmt.Sprintf("0.0.0.0:%d", port), 50*time.Millisecond)
 		if err == nil {
 			conn.Close()
-			fmt.Printf("[roost-dev] Port %d has something listening on 0.0.0.0, skipping\n", port)
+			fmt.Printf("[fireup] Port %d has something listening on 0.0.0.0, skipping\n", port)
 			continue
 		}
 
@@ -179,17 +179,17 @@ func (m *Manager) findFreePort() (int, error) {
 			ln.Close()
 			// Reserve this port until the process binds or fails
 			m.reservedPorts[port] = true
-			fmt.Printf("[roost-dev] Allocated and reserved port %d\n", port)
+			fmt.Printf("[fireup] Allocated and reserved port %d\n", port)
 			return port, nil
 		}
-		fmt.Printf("[roost-dev] Port %d bind failed: %v\n", port, err)
+		fmt.Printf("[fireup] Port %d bind failed: %v\n", port, err)
 	}
 	return 0, fmt.Errorf("no free ports available in range %d-%d", m.portStart, m.portEnd)
 }
 
 // releasePort removes a port reservation
 func (m *Manager) releasePort(port int) {
-	fmt.Printf("[roost-dev] Released port reservation: %d\n", port)
+	fmt.Printf("[fireup] Released port reservation: %d\n", port)
 	delete(m.reservedPorts, port)
 }
 
@@ -222,7 +222,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 		m.mu.Unlock()
 		return nil, err
 	}
-	fmt.Printf("[roost-dev] Starting %s on port %d\n", name, port)
+	fmt.Printf("[fireup] Starting %s on port %d\n", name, port)
 
 	// Create process
 	ctx, cancel := context.WithCancel(context.Background())
@@ -297,7 +297,7 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 		// Write log BEFORE setting failed flag to avoid race condition
 		// where status shows "failed" but logs are empty
 		if err != nil {
-			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
+			proc.logs.Write([]byte("[fireup] Process exited\n"))
 		}
 		proc.mu.Lock()
 		if err != nil {
@@ -388,7 +388,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		m.mu.Unlock()
 		return nil, err
 	}
-	fmt.Printf("[roost-dev] Starting %s on port %d\n", name, port)
+	fmt.Printf("[fireup] Starting %s on port %d\n", name, port)
 
 	// Create process
 	ctx, cancel := context.WithCancel(context.Background())
@@ -462,7 +462,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		// Write log BEFORE setting failed flag to avoid race condition
 		// where status shows "failed" but logs are empty
 		if err != nil {
-			proc.logs.Write([]byte("[roost-dev] Process exited\n"))
+			proc.logs.Write([]byte("[fireup] Process exited\n"))
 		}
 		proc.mu.Lock()
 		if err != nil {
@@ -531,7 +531,7 @@ func cleanupRailsPID(dir string) {
 	if err != nil {
 		// Invalid PID file, remove it
 		os.Remove(pidFile)
-		fmt.Printf("[roost-dev] Removed invalid PID file: %s\n", pidFile)
+		fmt.Printf("[fireup] Removed invalid PID file: %s\n", pidFile)
 		return
 	}
 
@@ -539,7 +539,7 @@ func cleanupRailsPID(dir string) {
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		os.Remove(pidFile)
-		fmt.Printf("[roost-dev] Removed stale PID file (pid %d): %s\n", pid, pidFile)
+		fmt.Printf("[fireup] Removed stale PID file (pid %d): %s\n", pid, pidFile)
 		return
 	}
 
@@ -548,13 +548,13 @@ func cleanupRailsPID(dir string) {
 	if err != nil {
 		// Process doesn't exist, remove the stale PID file
 		os.Remove(pidFile)
-		fmt.Printf("[roost-dev] Removed stale PID file (pid %d not running): %s\n", pid, pidFile)
+		fmt.Printf("[fireup] Removed stale PID file (pid %d not running): %s\n", pid, pidFile)
 		return
 	}
 
-	// Process IS running - this is likely an orphaned process from a previous roost-dev
+	// Process IS running - this is likely an orphaned process from a previous fireup
 	// Kill it so we can start fresh
-	fmt.Printf("[roost-dev] Killing orphaned Rails process (pid %d)\n", pid)
+	fmt.Printf("[fireup] Killing orphaned Rails process (pid %d)\n", pid)
 	process.Signal(syscall.SIGTERM)
 	time.Sleep(100 * time.Millisecond)
 	process.Signal(syscall.SIGKILL)
@@ -603,7 +603,7 @@ func (p *Process) Kill() {
 		var err error
 		pgid, err = syscall.Getpgid(pid)
 		if err != nil {
-			fmt.Printf("[roost-dev] Kill %s: Getpgid(%d) failed: %v\n", p.Name, pid, err)
+			fmt.Printf("[fireup] Kill %s: Getpgid(%d) failed: %v\n", p.Name, pid, err)
 		} else {
 			hasPgid = true
 		}
@@ -612,19 +612,19 @@ func (p *Process) Kill() {
 
 	if hasPgid {
 		// Kill the entire process group
-		fmt.Printf("[roost-dev] Kill %s: sending SIGTERM to process group -%d\n", p.Name, pgid)
+		fmt.Printf("[fireup] Kill %s: sending SIGTERM to process group -%d\n", p.Name, pgid)
 		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
-			fmt.Printf("[roost-dev] Kill %s: SIGTERM to group -%d failed: %v\n", p.Name, pgid, err)
+			fmt.Printf("[fireup] Kill %s: SIGTERM to group -%d failed: %v\n", p.Name, pgid, err)
 		}
 		// Give it a moment to clean up, then force kill
 		time.Sleep(100 * time.Millisecond)
-		fmt.Printf("[roost-dev] Kill %s: sending SIGKILL to process group -%d\n", p.Name, pgid)
+		fmt.Printf("[fireup] Kill %s: sending SIGKILL to process group -%d\n", p.Name, pgid)
 		if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
-			fmt.Printf("[roost-dev] Kill %s: SIGKILL to group -%d failed: %v\n", p.Name, pgid, err)
+			fmt.Printf("[fireup] Kill %s: SIGKILL to group -%d failed: %v\n", p.Name, pgid, err)
 		}
 	} else if hasPid {
 		// Fallback: kill by PID if we couldn't get PGID
-		fmt.Printf("[roost-dev] Kill %s: falling back to PID kill for %d\n", p.Name, pid)
+		fmt.Printf("[fireup] Kill %s: falling back to PID kill for %d\n", p.Name, pid)
 		syscall.Kill(pid, syscall.SIGTERM)
 		time.Sleep(100 * time.Millisecond)
 		syscall.Kill(pid, syscall.SIGKILL)
@@ -654,7 +654,7 @@ func killChildProcesses(parentPid int, name string) {
 		if err != nil {
 			continue
 		}
-		fmt.Printf("[roost-dev] Kill %s: killing orphaned child PID %d\n", name, childPid)
+		fmt.Printf("[fireup] Kill %s: killing orphaned child PID %d\n", name, childPid)
 		// Recursively kill grandchildren first
 		killChildProcesses(childPid, name)
 		// Then kill this child
@@ -748,17 +748,17 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 
 	if len(m.processes) == 0 {
-		fmt.Println("[roost-dev] StopAll: no processes to stop")
+		fmt.Println("[fireup] StopAll: no processes to stop")
 		return
 	}
 
-	fmt.Printf("[roost-dev] StopAll: stopping %d processes\n", len(m.processes))
+	fmt.Printf("[fireup] StopAll: stopping %d processes\n", len(m.processes))
 	for name, proc := range m.processes {
-		fmt.Printf("[roost-dev] StopAll: stopping %s\n", name)
+		fmt.Printf("[fireup] StopAll: stopping %s\n", name)
 		proc.Kill()
 		delete(m.processes, name)
 	}
-	fmt.Println("[roost-dev] StopAll: all processes stopped")
+	fmt.Println("[fireup] StopAll: all processes stopped")
 }
 
 // IsRunning returns true if the process is still running
@@ -780,7 +780,7 @@ func (p *Process) IsRunning() bool {
 		return false
 	}
 
-	fmt.Printf("[roost-dev] IsRunning: %s = true (port %d)\n", p.Name, p.Port)
+	fmt.Printf("[fireup] IsRunning: %s = true (port %d)\n", p.Name, p.Port)
 	return true
 }
 

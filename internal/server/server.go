@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/panozzaj/roost-dev/internal/certs"
-	"github.com/panozzaj/roost-dev/internal/config"
-	"github.com/panozzaj/roost-dev/internal/ollama"
-	"github.com/panozzaj/roost-dev/internal/process"
+	"github.com/panozzaj/fireup/internal/certs"
+	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/ollama"
+	"github.com/panozzaj/fireup/internal/process"
 )
 
 // slugify converts a name to a URL-safe slug (lowercase, spaces to dashes)
@@ -39,7 +39,7 @@ func (s *Server) collectProcessNames() map[string]bool {
 	return names
 }
 
-// Server is the main roost-dev server
+// Server is the main fireup server
 type Server struct {
 	cfg           *config.Config
 	apps          *config.AppStore
@@ -255,20 +255,20 @@ func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager, ho
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown() {
-	fmt.Println("[roost-dev] Shutdown: stopping config watcher...")
+	fmt.Println("[fireup] Shutdown: stopping config watcher...")
 	if s.configWatcher != nil {
 		s.configWatcher.Stop()
 	}
-	fmt.Println("[roost-dev] Shutdown: stopping all processes...")
+	fmt.Println("[fireup] Shutdown: stopping all processes...")
 	s.procs.StopAll()
-	fmt.Println("[roost-dev] Shutdown: closing HTTP servers...")
+	fmt.Println("[fireup] Shutdown: closing HTTP servers...")
 	if s.httpSrv != nil {
 		s.httpSrv.Close()
 	}
 	if s.httpsSrv != nil {
 		s.httpsSrv.Close()
 	}
-	fmt.Println("[roost-dev] Shutdown: done")
+	fmt.Println("[fireup] Shutdown: done")
 }
 
 // logRequest logs a request handling event

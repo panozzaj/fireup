@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/config"
-	"github.com/panozzaj/roost-dev/internal/process"
-	"github.com/panozzaj/roost-dev/internal/proxy"
-	"github.com/panozzaj/roost-dev/internal/server/pages"
+	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/process"
+	"github.com/panozzaj/fireup/internal/proxy"
+	"github.com/panozzaj/fireup/internal/server/pages"
 )
 
 // handleRequest routes requests based on hostname
@@ -21,21 +21,21 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		host = host[:idx]
 	}
 
-	// Check for dashboard or roost-dev subdomains (for test services)
-	if host == "roost-dev."+s.cfg.TLD || host == "roost-dev" {
+	// Check for dashboard or fireup subdomains (for test services)
+	if host == "fireup."+s.cfg.TLD || host == "fireup" {
 		s.handleDashboard(w, r)
 		return
 	}
 
-	// Built-in welcome page at roost-test.<tld>
-	if host == "roost-test."+s.cfg.TLD || host == "roost-test" {
+	// Built-in welcome page at fireup-test.<tld>
+	if host == "fireup-test."+s.cfg.TLD || host == "fireup-test" {
 		s.handleWelcome(w, r)
 		return
 	}
-	if strings.HasSuffix(host, ".roost-dev."+s.cfg.TLD) {
-		// Subdomain of roost-dev.test → route to roost-dev-tests services
-		subdomain := strings.TrimSuffix(host, ".roost-dev."+s.cfg.TLD)
-		if app, svc, found := s.apps.GetService("roost-dev-tests", subdomain); found {
+	if strings.HasSuffix(host, ".fireup."+s.cfg.TLD) {
+		// Subdomain of fireup.test → route to fireup-tests services
+		subdomain := strings.TrimSuffix(host, ".fireup."+s.cfg.TLD)
+		if app, svc, found := s.apps.GetService("fireup-tests", subdomain); found {
 			s.handleService(w, r, app, svc)
 			return
 		}
@@ -43,8 +43,8 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, pages.Error(
 			"Service not found",
-			fmt.Sprintf("No service named '%s' in roost-dev-tests", subdomain),
-			fmt.Sprintf(`<p class="hint">Check available services at <a href="//roost-dev.%s">roost-dev.%s</a></p>`, s.cfg.TLD, s.cfg.TLD),
+			fmt.Sprintf("No service named '%s' in fireup-tests", subdomain),
+			fmt.Sprintf(`<p class="hint">Check available services at <a href="//fireup.%s">fireup.%s</a></p>`, s.cfg.TLD, s.cfg.TLD),
 			s.cfg.TLD, s.getTheme()))
 		return
 	}
@@ -231,13 +231,13 @@ func (s *Server) ensureDependencies(app *config.App, svc *config.Service) {
 // handleService handles a request for a service within a multi-service app
 func (s *Server) handleService(w http.ResponseWriter, r *http.Request, app *config.App, svc *config.Service) {
 	procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
-	// Display name is the host without the TLD (e.g., "forever-start.roost-dev" from "forever-start.roost-dev.test")
+	// Display name is the host without the TLD (e.g., "forever-start.fireup" from "forever-start.fireup.test")
 	host := r.Host
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx] // Remove port
 	}
 	displayName := strings.TrimSuffix(host, "."+s.cfg.TLD)
-	configName := app.Name // e.g., "roost-dev-tests"
+	configName := app.Name // e.g., "fireup-tests"
 	s.logRequest("handleService: %s (path=%s)", procName, r.URL.Path)
 
 	// Start dependencies first
@@ -344,7 +344,7 @@ func (s *Server) startByName(name string) {
 type ServiceMatch struct {
 	App      *config.App
 	Service  *config.Service
-	ProcName string // internal process name (e.g., "good-slow-roost-dev-tests")
+	ProcName string // internal process name (e.g., "good-slow-fireup-tests")
 }
 
 // resolveServiceName resolves various name formats to a service.

@@ -1,4 +1,4 @@
-module github.com/panozzaj/roost-dev
+module github.com/panozzaj/fireup
 
 go 1.25.4
 

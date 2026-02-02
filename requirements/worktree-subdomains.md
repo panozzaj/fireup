@@ -12,7 +12,7 @@ Developer has Claude Code running in multiple worktrees:
 - `~/projects/myapp-feature-123` (feature-123 branch)
 - `~/projects/myapp-bugfix-456` (bugfix-456 branch)
 
-Each worktree may have its own roost.yaml and running services on the same logical ports. The agent (or developer) needs to access each one via distinct URLs for testing.
+Each worktree may have its own fireup.yaml and running services on the same logical ports. The agent (or developer) needs to access each one via distinct URLs for testing.
 
 ## Proposed Solution
 
@@ -26,10 +26,10 @@ myapp.test → main/master branch (default)
 
 ### Detection
 
-roost-dev could detect worktrees via:
+fireup could detect worktrees via:
 
 1. `git worktree list` in project directories
-2. Scanning for multiple roost.yaml files that share the same `name`
+2. Scanning for multiple fireup.yaml files that share the same `name`
 3. Explicit configuration linking worktrees together
 
 ### Port Allocation
@@ -37,7 +37,7 @@ roost-dev could detect worktrees via:
 Each worktree needs its own port range. Options:
 
 1. **Auto-offset**: Branch hash determines port offset (e.g., feature-123 → base port + 1000)
-2. **Dynamic allocation**: roost-dev assigns ports and handles routing
+2. **Dynamic allocation**: fireup assigns ports and handles routing
 3. **Explicit config**: Each worktree specifies its own ports
 
 ### Routing
@@ -53,7 +53,7 @@ When request comes to `feature-123.myapp.test`:
 ### Option A: Auto-discovery
 
 ```yaml
-# roost.yaml
+# fireup.yaml
 name: myapp
 worktrees:
     auto: true # detect sibling worktrees automatically
@@ -63,7 +63,7 @@ worktrees:
 ### Option B: Explicit linking
 
 ```yaml
-# roost.yaml in main worktree
+# fireup.yaml in main worktree
 name: myapp
 worktrees:
     - path: ../myapp-feature-123
@@ -75,9 +75,9 @@ worktrees:
 ### Option C: Independent with shared name
 
 ```yaml
-# Each worktree's roost.yaml
+# Each worktree's fireup.yaml
 name: myapp
-branch: feature-123 # roost-dev auto-routes {branch}.myapp.test here
+branch: feature-123 # fireup auto-routes {branch}.myapp.test here
 ```
 
 ## Benefits
@@ -92,7 +92,7 @@ branch: feature-123 # roost-dev auto-routes {branch}.myapp.test here
 - How to handle branch names with special characters (slashes, etc.)?
 - Should this integrate with the dashboard to show all worktrees?
 - How to handle worktrees on same branch?
-- Should roost-dev manage starting/stopping services across worktrees, or just routing?
+- Should fireup manage starting/stopping services across worktrees, or just routing?
 
 ## Related
 

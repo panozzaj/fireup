@@ -1,41 +1,41 @@
-ROOST-DEV(1)                    User Commands                    ROOST-DEV(1)
+FIREUP(1)                    User Commands                    FIREUP(1)
 
 NAME
-    roost-dev - local development server manager
+    fireup - local development server manager
 
 DESCRIPTION
-    roost-dev manages local development servers with automatic port
+    fireup manages local development servers with automatic port
     allocation, subdomain routing (*.test), and a web dashboard.
 
-    Dashboard: http://roost-dev.test
+    Dashboard: http://fireup.test
 
 CONFIGURATION
-    Config files are stored in ~/.config/roost-dev/
+    Config files are stored in ~/.config/fireup/
 
     SIMPLE COMMAND (recommended)
-        Create a file with just a command. roost-dev assigns a dynamic port
+        Create a file with just a command. fireup assigns a dynamic port
         via $PORT, avoiding conflicts with other apps.
 
-        Example: ~/.config/roost-dev/myapp
+        Example: ~/.config/fireup/myapp
             rails server -p $PORT
 
     FIXED PORT PROXY (not recommended)
         A file containing just a port number proxies to that port.
         Fixed ports can conflict; prefer commands with $PORT.
 
-        Example: ~/.config/roost-dev/legacy
+        Example: ~/.config/fireup/legacy
             3000
 
     STATIC SITE (symlink)
         Symlink to a directory containing index.html.
 
         Example:
-            ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+            ln -s ~/projects/my-site ~/.config/fireup/mysite
 
     YAML CONFIG
         For more options, use YAML format (appname.yml).
 
-        Example: ~/.config/roost-dev/myapp.yml
+        Example: ~/.config/fireup/myapp.yml
             description: My Rails App
             root: ~/projects/myapp
             cmd: rails server -p $PORT -b 127.0.0.1
@@ -46,7 +46,7 @@ CONFIGURATION
     MULTI-SERVICE YAML
         For apps with multiple services (e.g., web + assets).
 
-        Example: ~/.config/roost-dev/myapp.yml
+        Example: ~/.config/fireup/myapp.yml
             description: My Full-Stack App
             root: ~/projects/myapp
             services:
@@ -79,7 +79,7 @@ YAML OPTIONS
         depends_on    List of services that must start first
 
 ENVIRONMENT VARIABLES
-    roost-dev sets these variables for each process:
+    fireup sets these variables for each process:
 
     PORT          The allocated port for this service. Your command should
                   listen on this port.
@@ -104,28 +104,28 @@ URLS AND ROUTING
 
 COMMANDS
     APP STATUS
-        roost-dev status          List apps and their running status
-        roost-dev status myapp    Filter to apps/services matching "myapp"
-        roost-dev status --json   Output as JSON (same as /api/status)
-        roost-dev list            Alias for 'status'
+        fireup status          List apps and their running status
+        fireup status myapp    Filter to apps/services matching "myapp"
+        fireup status --json   Output as JSON (same as /api/status)
+        fireup list            Alias for 'status'
 
     APP CONTROL
-        roost-dev start <name>    Start an app or service
-        roost-dev stop <name>     Stop an app or service
-        roost-dev restart <name>  Restart an app or service
-        roost-dev logs [name]     View logs (server logs if no name specified)
+        fireup start <name>    Start an app or service
+        fireup stop <name>     Stop an app or service
+        fireup restart <name>  Restart an app or service
+        fireup logs [name]     View logs (server logs if no name specified)
 
     SETUP
-        roost-dev setup           Interactive setup wizard
-        roost-dev setup status    Show component status (ports, cert, service)
-        roost-dev teardown        Remove all roost-dev configuration
+        fireup setup           Interactive setup wizard
+        fireup setup status    Show component status (ports, cert, service)
+        fireup teardown        Remove all fireup configuration
 
     ADVANCED
-        roost-dev serve           Start the server (usually runs as service)
-        roost-dev ports           Manage port forwarding
-        roost-dev cert            Manage HTTPS certificates
-        roost-dev service         Manage background service
-        roost-dev docs            Show this documentation
+        fireup serve           Start the server (usually runs as service)
+        fireup ports           Manage port forwarding
+        fireup cert            Manage HTTPS certificates
+        fireup service         Manage background service
+        fireup docs            Show this documentation
 
 SERVICE NAME FORMATS
     For start/stop/restart, you can target individual services:
@@ -137,60 +137,60 @@ SERVICE NAME FORMATS
 
 VIEWING LOGS
     Server logs (request routing):
-        roost-dev logs
+        fireup logs
 
     App logs:
-        roost-dev logs myapp
+        fireup logs myapp
 
     Follow logs in real-time:
-        roost-dev logs -f myapp
+        fireup logs -f myapp
 
     Show last N lines:
-        roost-dev logs -n 50 myapp
+        fireup logs -n 50 myapp
 
-    Logs are also visible in the dashboard at http://roost-dev.test
+    Logs are also visible in the dashboard at http://fireup.test
 
 TROUBLESHOOTING
     "Address already in use"
-        Another process is using the port. roost-dev allocates ports in the
+        Another process is using the port. fireup allocates ports in the
         50000-60000 range. Check for orphaned processes:
             lsof -i :50000-60000 | grep LISTEN
 
     App won't start
-        1. Check the app's logs: roost-dev logs <app>
+        1. Check the app's logs: fireup logs <app>
         2. Verify the command works manually:
                cd /path/to/app && PORT=3000 <your-command>
         3. Ensure dependencies (node, ruby, etc.) are available
 
     "Connection refused" in browser
-        1. Check if roost-dev is running: roost-dev setup status
-        2. Check if port forwarding is set up: roost-dev ports install
+        1. Check if fireup is running: fireup setup status
+        2. Check if port forwarding is set up: fireup ports install
         3. Verify DNS: ping myapp.test (should resolve to 127.0.0.1)
 
     HTTPS not working
-        1. Run: roost-dev cert install
+        1. Run: fireup cert install
         2. Restart your browser completely (quit and reopen)
-        3. Check certificate status: roost-dev cert status
+        3. Check certificate status: fireup cert status
 
     Changes to config not taking effect
-        roost-dev watches config files and reloads automatically.
-        If not working, restart the app: roost-dev restart <app>
+        fireup watches config files and reloads automatically.
+        If not working, restart the app: fireup restart <app>
 
     Environment not loading (rbenv, nvm, etc.)
-        roost-dev runs commands in a login shell. Ensure your shell config
+        fireup runs commands in a login shell. Ensure your shell config
         (~/.zshrc or ~/.bashrc) sets up your environment correctly.
 
     Rails PID file conflicts
-        roost-dev automatically removes stale tmp/pids/server.pid files
+        fireup automatically removes stale tmp/pids/server.pid files
         before starting Rails apps.
 
 TAILSCALE SERVE (REMOTE ACCESS)
-    roost-dev supports Tailscale Serve for accessing your local services
+    fireup supports Tailscale Serve for accessing your local services
     from other devices on your Tailnet (e.g., your phone).
 
     SETUP
         1. Install Tailscale and connect to your tailnet
-        2. Expose roost-dev via Tailscale Serve:
+        2. Expose fireup via Tailscale Serve:
                tailscale serve http://127.0.0.1:9280
 
         3. Access from any device on your tailnet:
@@ -208,7 +208,7 @@ TAILSCALE SERVE (REMOTE ACCESS)
         The path prefix is stripped before routing to your service.
 
     EXAMPLES
-        # Expose roost-dev (run on your laptop)
+        # Expose fireup (run on your laptop)
         tailscale serve http://127.0.0.1:9280
 
         # From your phone, access the api service of focustrack:
@@ -218,14 +218,14 @@ TAILSCALE SERVE (REMOTE ACCESS)
         https://macbook-pro.tail094a69.ts.net/blog/
 
     HOW IT WORKS
-        When roost-dev receives a request from a *.ts.net host:
+        When fireup receives a request from a *.ts.net host:
         1. It extracts the app/service name from the first path segment
         2. For "service-app" patterns (e.g., api-myapp), routes to that service
         3. For simple names (e.g., blog), it routes to the app
         4. The path prefix is stripped before forwarding
 
     INTERSTITIAL PAGES
-        When a service is starting, roost-dev shows an interstitial page that
+        When a service is starting, fireup shows an interstitial page that
         polls for status. This works correctly over Tailscale - the page polls
         the same Tailscale URL rather than the local .test domain.
 
@@ -243,13 +243,13 @@ TAILSCALE SERVE (REMOTE ACCESS)
         tailscale serve status   # View current configuration
 
 FILES
-    ~/.config/roost-dev/           App configuration directory
-    ~/.config/roost-dev/config.json   Global settings (TLD, etc.)
-    ~/.config/roost-dev/certs/     HTTPS certificates
-    ~/Library/LaunchAgents/com.roost-dev.plist   Background service
-    ~/Library/Logs/roost-dev/      Service logs
+    ~/.config/fireup/           App configuration directory
+    ~/.config/fireup/config.json   Global settings (TLD, etc.)
+    ~/.config/fireup/certs/     HTTPS certificates
+    ~/Library/LaunchAgents/com.fireup.plist   Background service
+    ~/Library/Logs/fireup/      Service logs
 
 SEE ALSO
-    Dashboard: http://roost-dev.test
-    Source: https://github.com/panozzaj/roost-dev
+    Dashboard: http://fireup.test
+    Source: https://github.com/panozzaj/fireup
 

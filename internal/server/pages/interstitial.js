@@ -4,9 +4,9 @@ var appName = container.dataset.app
 var configName = container.dataset.config
 var tld = container.dataset.tld
 // When accessed via Tailscale (.ts.net), use same origin for API calls
-// Otherwise use roost-dev.{tld} for local development
+// Otherwise use fireup.{tld} for local development
 var isTailscale = window.location.hostname.endsWith('.ts.net')
-var baseUrl = isTailscale ? window.location.origin : window.location.protocol + '//roost-dev.' + tld
+var baseUrl = isTailscale ? window.location.origin : window.location.protocol + '//fireup.' + tld
 var failed = container.dataset.failed === 'true'
 var lastLogCount = 0
 var buttonsShown = false
@@ -39,7 +39,7 @@ document.addEventListener('click', function (e) {
 
 function copyConfigPath(e) {
     e.stopPropagation()
-    var path = window.configFullPath || '~/.config/roost-dev/' + configName + '.yml'
+    var path = window.configFullPath || '~/.config/fireup/' + configName + '.yml'
     var btn = document.getElementById('copy-path-btn')
     var origHTML = btn.innerHTML
     navigator.clipboard.writeText(path).then(function () {
@@ -275,9 +275,9 @@ function copyForAgent() {
     var origHTML = btn.innerHTML
     var logs = getLogsText()
     var bt = String.fromCharCode(96)
-    var configPath = window.configFullPath || '~/.config/roost-dev/' + appName + '.yml'
+    var configPath = window.configFullPath || '~/.config/fireup/' + appName + '.yml'
     var context =
-        'I am using roost-dev, a local development server that manages apps via config files in ~/.config/roost-dev/.\n\n' +
+        'I am using fireup, a local development server that manages apps via config files in ~/.config/fireup/.\n\n' +
         'The app "' +
         appName +
         '" failed to start. The config file is at:\n' +
@@ -295,14 +295,14 @@ function copyForAgent() {
         bt +
         '\n\n' +
         'Useful commands:\n' +
-        '  roost-dev restart ' +
+        '  fireup restart ' +
         appName +
         '  # Restart this app\n' +
-        '  roost-dev logs ' +
+        '  fireup logs ' +
         appName +
         '     # View logs\n' +
-        '  roost-dev --help                 # CLI help\n' +
-        '  roost-dev docs                   # Full documentation\n\n' +
+        '  fireup --help                 # CLI help\n' +
+        '  fireup docs                   # Full documentation\n\n' +
         'Please help me understand and fix this error.'
     var textarea = document.createElement('textarea')
     textarea.value = context

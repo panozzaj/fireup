@@ -69,8 +69,8 @@ func TestGetUserLaunchAgentPath(t *testing.T) {
 	path := getUserLaunchAgentPath()
 
 	// Should contain the expected plist name
-	if !strings.Contains(path, "com.roost-dev.plist") {
-		t.Errorf("expected path to contain com.roost-dev.plist, got %s", path)
+	if !strings.Contains(path, "com.fireup.plist") {
+		t.Errorf("expected path to contain com.fireup.plist, got %s", path)
 	}
 
 	// Should be in LaunchAgents directory
@@ -87,9 +87,9 @@ func TestGetCertsDir(t *testing.T) {
 		t.Errorf("expected dir to end with /certs, got %s", dir)
 	}
 
-	// Should contain roost-dev
-	if !strings.Contains(dir, "roost-dev") {
-		t.Errorf("expected dir to contain roost-dev, got %s", dir)
+	// Should contain fireup
+	if !strings.Contains(dir, "fireup") {
+		t.Errorf("expected dir to contain fireup, got %s", dir)
 	}
 }
 

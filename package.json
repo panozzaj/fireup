@@ -1,8 +1,8 @@
 {
-  "name": "roost-dev",
+  "name": "fireup",
   "private": true,
   "type": "module",
-  "description": "Development linting tools for roost-dev",
+  "description": "Development linting tools for fireup",
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint 'internal/**/*.js'",

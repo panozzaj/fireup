@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/panozzaj/roost-dev/internal/setup"
+	"github.com/panozzaj/fireup/internal/setup"
 )
 
 // setupChecker is used to check installation status
@@ -33,7 +33,7 @@ func isServiceInstalled() (bool, bool) {
 		return false, false
 	}
 	// Check if it's running (requires exec, not abstracted)
-	cmd := exec.Command("launchctl", "list", "com.roost-dev")
+	cmd := exec.Command("launchctl", "list", "com.fireup")
 	if err := cmd.Run(); err != nil {
 		return true, false
 	}
@@ -97,8 +97,8 @@ func checkInstallConflicts(tld string) error {
 	if _, err := os.Stat(resolverPath); err == nil {
 		// Read it to see if it's ours
 		data, _ := os.ReadFile(resolverPath)
-		if !strings.Contains(string(data), "roost-dev") {
-			warnings = append(warnings, fmt.Sprintf("existing resolver at %s (not from roost-dev)", resolverPath))
+		if !strings.Contains(string(data), "fireup") {
+			warnings = append(warnings, fmt.Sprintf("existing resolver at %s (not from fireup)", resolverPath))
 		}
 	}
 
@@ -107,7 +107,7 @@ func checkInstallConflicts(tld string) error {
 		for _, w := range warnings {
 			fmt.Printf("  - %s\n", w)
 		}
-		fmt.Println("\nThese may conflict with roost-dev. Consider removing them first.")
+		fmt.Println("\nThese may conflict with fireup. Consider removing them first.")
 		fmt.Print("Continue anyway? [y/N]: ")
 
 		var response string

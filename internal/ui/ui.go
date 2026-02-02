@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/icons"
-	"github.com/panozzaj/roost-dev/internal/styles"
+	"github.com/panozzaj/fireup/internal/icons"
+	"github.com/panozzaj/fireup/internal/styles"
 )
 
 //go:embed dashboard.css
@@ -58,7 +58,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>roost-dev</title>
+    <title>fireup</title>
 {{.ThemeScript}}
     <style>
 {{.ThemeCSS}}
@@ -69,7 +69,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <body>
     <div class="container">
         <header>
-            <h1>roost-dev</h1>
+            <h1>fireup</h1>
             <div class="filter-bar" id="filter-bar">
                 <input type="text" id="filter-input" placeholder="Filter..." autocomplete="off">
                 <span class="filter-shortcut" id="filter-shortcut"><kbd>/</kbd></span>

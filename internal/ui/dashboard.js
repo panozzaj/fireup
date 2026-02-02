@@ -645,15 +645,15 @@ function updateApps(newApps) {
         newHTML =
             '<div class="empty-state">' +
             '<h2>No apps configured</h2>' +
-            '<p>Create a config file in <code style="display:inline;padding:2px 6px;margin:0">~/.config/roost-dev/</code></p>' +
+            '<p>Create a config file in <code style="display:inline;padding:2px 6px;margin:0">~/.config/fireup/</code></p>' +
             '<code># Example: create a config for your app\n' +
-            'echo "npm run dev" > ~/.config/roost-dev/myapp\n\n' +
+            'echo "npm run dev" > ~/.config/fireup/myapp\n\n' +
             '# Your command receives a $PORT env var\n' +
             '# Then visit http://myapp.' +
             TLD +
             '\n\n' +
-            '# For more options, see: roost-dev serve --help</code>' +
-            '<p style="margin-top:20px;font-size:13px">Config directory: <code style="display:inline;padding:2px 6px;margin:0">~/.config/roost-dev/</code></p>' +
+            '# For more options, see: fireup serve --help</code>' +
+            '<p style="margin-top:20px;font-size:13px">Config directory: <code style="display:inline;padding:2px 6px;margin:0">~/.config/fireup/</code></p>' +
             '</div>'
     } else {
         newHTML = newApps
@@ -1155,7 +1155,7 @@ function copyLogs(name, event) {
     // We use execCommand('copy') instead of navigator.clipboard.writeText() because
     // the Clipboard API requires a "secure context" (HTTPS or literal localhost).
     // Even though *.test domains resolve to 127.0.0.1, browsers check the hostname,
-    // not the resolved IP - so roost-dev.test is considered insecure.
+    // not the resolved IP - so fireup.test is considered insecure.
     // execCommand('copy') is deprecated but works in non-secure contexts by copying
     // selected text from a DOM element (hence the hidden textarea trick).
     var textarea = document.createElement('textarea')
@@ -1194,7 +1194,7 @@ function toggleAppSettings(name) {
 }
 
 function copyAppConfigPath(name, event) {
-    var path = '~/.config/roost-dev/' + name + '.yml'
+    var path = '~/.config/fireup/' + name + '.yml'
 
     var textarea = document.createElement('textarea')
     textarea.value = path
@@ -1262,14 +1262,14 @@ function copyForAgent(name, event) {
 
     var bt = String.fromCharCode(96)
     var context =
-        'I am using roost-dev, a local development server that manages apps via config files in ~/.config/roost-dev/.\n\n'
+        'I am using fireup, a local development server that manages apps via config files in ~/.config/fireup/.\n\n'
     if (hasFailed) {
         context += 'The app "' + name + '" failed to start. '
     } else {
         context += 'The app "' + name + '" is having issues. '
     }
     context +=
-        'The config file is at:\n~/.config/roost-dev/' +
+        'The config file is at:\n~/.config/fireup/' +
         name +
         '.yml\n\n' +
         'Here are the logs:\n\n' +
@@ -1284,14 +1284,14 @@ function copyForAgent(name, event) {
         bt +
         '\n\n' +
         'Useful commands:\n' +
-        '  roost-dev restart ' +
+        '  fireup restart ' +
         name +
         '  # Restart this app\n' +
-        '  roost-dev logs ' +
+        '  fireup logs ' +
         name +
         '     # View logs\n' +
-        '  roost-dev --help              # CLI help\n' +
-        '  roost-dev docs                # Full documentation\n\n' +
+        '  fireup --help              # CLI help\n' +
+        '  fireup docs                # Full documentation\n\n' +
         'Please help me understand and fix this error.'
 
     var textarea = document.createElement('textarea')

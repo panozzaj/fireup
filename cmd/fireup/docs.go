@@ -14,10 +14,10 @@ import (
 func cmdDocs(args []string) {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Println(`roost-dev docs - Show documentation
+			fmt.Println(`fireup docs - Show documentation
 
 USAGE:
-    roost-dev docs
+    fireup docs
 
 Shows configuration and troubleshooting documentation.
 Output is paged if running in a terminal.`)
@@ -30,21 +30,21 @@ Output is paged if running in a terminal.`)
 	var err error
 
 	// 1. Try relative to current directory (for development)
-	content, err = os.ReadFile("docs/roost-dev.txt")
+	content, err = os.ReadFile("docs/fireup.txt")
 	if err != nil {
 		// 2. Try relative to executable
 		if exe, exeErr := os.Executable(); exeErr == nil {
-			content, err = os.ReadFile(filepath.Join(filepath.Dir(exe), "docs", "roost-dev.txt"))
+			content, err = os.ReadFile(filepath.Join(filepath.Dir(exe), "docs", "fireup.txt"))
 		}
 	}
 	if err != nil {
 		// 3. Try in source location (for go run)
 		homeDir, _ := os.UserHomeDir()
-		content, err = os.ReadFile(filepath.Join(homeDir, "Documents", "dev", "roost-dev", "docs", "roost-dev.txt"))
+		content, err = os.ReadFile(filepath.Join(homeDir, "Documents", "dev", "fireup", "docs", "fireup.txt"))
 	}
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not find docs/roost-dev.txt\n")
+		fmt.Fprintf(os.Stderr, "Error: could not find docs/fireup.txt\n")
 		os.Exit(1)
 	}
 

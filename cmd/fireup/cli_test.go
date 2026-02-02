@@ -35,7 +35,7 @@ func TestGetDefaultConfigDir(t *testing.T) {
 	dir := getDefaultConfigDir()
 
 	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, ".config", "roost-dev")
+	expected := filepath.Join(homeDir, ".config", "fireup")
 
 	if dir != expected {
 		t.Errorf("getDefaultConfigDir() = %q, want %q", dir, expected)

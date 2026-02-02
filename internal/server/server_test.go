@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/panozzaj/roost-dev/internal/config"
-	"github.com/panozzaj/roost-dev/internal/process"
+	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/process"
 )
 
 func TestSlugify(t *testing.T) {
@@ -577,7 +577,7 @@ func TestIsTailscaleHost(t *testing.T) {
 		{"macbook-pro.tail094a69.ts.net", true},
 		{"my-machine.tailnet.ts.net", true},
 		{"foo.ts.net", true},
-		{"roost-dev.test", false},
+		{"fireup.test", false},
 		{"myapp.test", false},
 		{"example.com", false},
 		{"ts.net.example.com", false}, // ts.net must be suffix

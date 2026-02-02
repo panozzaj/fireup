@@ -4,8 +4,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/logo"
-	"github.com/panozzaj/roost-dev/internal/styles"
+	"github.com/panozzaj/fireup/internal/logo"
+	"github.com/panozzaj/fireup/internal/styles"
 )
 
 // errorPageData holds data for the error page template
@@ -33,7 +33,7 @@ var errorPageTmpl = template.Must(template.New("error").Parse(`<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <div class="logo"><a href="//roost-dev.{{.TLD}}">{{.Logo}}</a></div>
+        <div class="logo"><a href="//fireup.{{.TLD}}">{{.Logo}}</a></div>
         <h1>{{.Title}}</h1>
         <p class="message">{{.Message}}</p>
         {{.Hint}}

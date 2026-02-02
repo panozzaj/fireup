@@ -17,11 +17,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/panozzaj/roost-dev/internal/config"
-	"github.com/panozzaj/roost-dev/internal/diff"
-	"github.com/panozzaj/roost-dev/internal/dns"
-	"github.com/panozzaj/roost-dev/internal/logo"
-	"github.com/panozzaj/roost-dev/internal/server"
+	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/diff"
+	"github.com/panozzaj/fireup/internal/dns"
+	"github.com/panozzaj/fireup/internal/logo"
+	"github.com/panozzaj/fireup/internal/server"
 )
 
 func printLogo() {
@@ -31,9 +31,9 @@ func printLogo() {
 }
 
 // confirmStep prompts the user for y/N confirmation and returns true if they confirm.
-// If ROOST_DEV_YES=1 is set, automatically returns true without prompting.
+// If FIREUP_YES=1 is set, automatically returns true without prompting.
 func confirmStep(prompt string) bool {
-	if os.Getenv("ROOST_DEV_YES") == "1" {
+	if os.Getenv("FIREUP_YES") == "1" {
 		return true
 	}
 	fmt.Printf("%s [y/N]: ", prompt)
@@ -44,10 +44,10 @@ func confirmStep(prompt string) bool {
 
 // confirmWithPlan shows a summary of planned changes and prompts for confirmation.
 // User can press '?' to see the full diff. Returns true if confirmed, false if cancelled.
-// If ROOST_DEV_YES=1 is set, automatically returns true without prompting or printing.
+// If FIREUP_YES=1 is set, automatically returns true without prompting or printing.
 // If there are no actual changes, returns true (nothing to do, but not cancelled).
 func confirmWithPlan(plan *diff.Plan, prompt string) bool {
-	if os.Getenv("ROOST_DEV_YES") == "1" {
+	if os.Getenv("FIREUP_YES") == "1" {
 		return true
 	}
 
@@ -84,7 +84,7 @@ func main() {
 
 	// Handle global flags before command
 	if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
-		// Check if asking for help on a specific command: roost-dev help serve
+		// Check if asking for help on a specific command: fireup help serve
 		if len(os.Args) >= 3 {
 			os.Args = []string{os.Args[0], os.Args[2], "--help"}
 		} else {
@@ -93,7 +93,7 @@ func main() {
 		}
 	}
 	if os.Args[1] == "-v" || os.Args[1] == "--version" || os.Args[1] == "version" {
-		fmt.Printf("roost-dev %s\n", version)
+		fmt.Printf("fireup %s\n", version)
 		os.Exit(0)
 	}
 
@@ -135,7 +135,7 @@ func main() {
 	case "logs":
 		cmdLogs(args)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\nRun 'roost-dev help' for usage.\n", cmd)
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\nRun 'fireup help' for usage.\n", cmd)
 		os.Exit(1)
 	}
 }
@@ -143,10 +143,10 @@ func main() {
 func printMainUsage() {
 	printLogo()
 	fmt.Println(`
-roost-dev - Local development proxy for all your projects
+fireup - Local development proxy for all your projects
 
 USAGE:
-    roost-dev <command> [options]
+    fireup <command> [options]
 
 APP STATUS:
     status            Show configured apps and their status (--json for JSON)
@@ -161,10 +161,10 @@ APP CONTROL:
 SETUP:
     setup             Interactive setup wizard (ports + cert + service)
     setup status      Show status of setup components
-    teardown          Remove all roost-dev configuration
+    teardown          Remove all fireup configuration
 
 ADVANCED:
-    serve             Start the roost-dev server (usually runs as service)
+    serve             Start the fireup server (usually runs as service)
     ports             Manage port forwarding (install/uninstall)
     cert              Manage HTTPS certificates (install/uninstall)
     service           Manage background service (install/uninstall)
@@ -174,8 +174,8 @@ HELP:
     <command> --help  Command-specific options
 
 QUICK START:
-    roost-dev setup               # Interactive setup wizard
-    # Then visit http://roost-dev.test`)
+    fireup setup               # Interactive setup wizard
+    # Then visit http://fireup.test`)
 }
 
 // cmdServe handles the 'serve' command
@@ -199,27 +199,27 @@ func cmdServe(args []string) {
 	fs.StringVar(&tld, "tld", "", "Top-level domain (default: from config or 'localhost')")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev serve - Start the roost-dev server
+		fmt.Println(`fireup serve - Start the fireup server
 
 USAGE:
-    roost-dev serve [options]
+    fireup serve [options]
 
 OPTIONS:`)
 		fs.PrintDefaults()
 		fmt.Println(`
 CONFIGURATION:
-    Place config files in ~/.config/roost-dev/
+    Place config files in ~/.config/fireup/
 
     Command (recommended):
-        echo "npm run dev" > ~/.config/roost-dev/myapp
-        # roost-dev assigns a dynamic PORT, avoiding conflicts
+        echo "npm run dev" > ~/.config/fireup/myapp
+        # fireup assigns a dynamic PORT, avoiding conflicts
 
     Static site (symlink to directory):
-        ln -s ~/projects/my-site ~/.config/roost-dev/mysite
+        ln -s ~/projects/my-site ~/.config/fireup/mysite
         # Directory must contain index.html
 
     Fixed port proxy (not recommended):
-        echo "3000" > ~/.config/roost-dev/myapp
+        echo "3000" > ~/.config/fireup/myapp
         # Fixed ports can conflict; prefer commands with $PORT
 
     YAML config (for multi-service projects):
@@ -306,20 +306,20 @@ CONFIGURATION:
 
 	go func() {
 		<-sigCh
-		fmt.Println("\n[roost-dev] Received shutdown signal, stopping all processes...")
+		fmt.Println("\n[fireup] Received shutdown signal, stopping all processes...")
 		srv.Shutdown()
-		fmt.Println("[roost-dev] Shutdown complete")
+		fmt.Println("[fireup] Shutdown complete")
 		os.Exit(0)
 	}()
 
 	printLogo()
-	fmt.Printf("roost-dev %s\n", version)
+	fmt.Printf("fireup %s\n", version)
 	fmt.Printf("Configuration directory: %s\n", configDir)
 	fmt.Printf("Listening on http://127.0.0.1:%d\n", httpPort)
 	if urlPort == 80 {
-		fmt.Printf("Dashboard at http://roost-dev.%s\n", tld)
+		fmt.Printf("Dashboard at http://fireup.%s\n", tld)
 	} else {
-		fmt.Printf("Dashboard at http://roost-dev.%s:%d\n", tld, urlPort)
+		fmt.Printf("Dashboard at http://fireup.%s:%d\n", tld, urlPort)
 	}
 
 	// Start DNS server for custom TLDs
@@ -339,10 +339,10 @@ CONFIGURATION:
 		if _, err := os.Stat(pfAnchorPath); os.IsNotExist(err) {
 			fmt.Println(colorYellow + "WARNING: URLs like http://myapp.localhost won't work yet.")
 			fmt.Println("")
-			fmt.Println("  roost-dev is running on port 9280, but your browser will")
+			fmt.Println("  fireup is running on port 9280, but your browser will")
 			fmt.Println("  try port 80. Run this once to set up the redirect:")
 			fmt.Println("")
-			fmt.Println("    sudo roost-dev install")
+			fmt.Println("    sudo fireup install")
 			fmt.Println(colorReset)
 		}
 	}
@@ -357,10 +357,10 @@ func cmdAppControl(action string, args []string) {
 	// Check for help
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Printf(`roost-dev %s - %s an app or subprocess
+			fmt.Printf(`fireup %s - %s an app or subprocess
 
 USAGE:
-    roost-dev %s <name>
+    fireup %s <name>
 
 NAME FORMATS:
     myapp                 %s all services in the app
@@ -368,14 +368,14 @@ NAME FORMATS:
     worker.myapp          %s the 'worker' service (dot syntax)
     worker                %s the service if name is unique across apps
 
-Requires the roost-dev server to be running.
+Requires the fireup server to be running.
 `, action, strings.Title(action), action, strings.Title(action), strings.Title(action), strings.Title(action), strings.Title(action))
 			os.Exit(0)
 		}
 	}
 
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: roost-dev %s <app-name>\n", action)
+		fmt.Fprintf(os.Stderr, "Usage: fireup %s <app-name>\n", action)
 		os.Exit(1)
 	}
 
@@ -404,26 +404,26 @@ func cmdSetup(args []string) {
 	fs.StringVar(&configDir, "dir", getDefaultConfigDir(), "Configuration directory")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev setup - Interactive setup wizard
+		fmt.Println(`fireup setup - Interactive setup wizard
 
 USAGE:
-    roost-dev setup [options]
-    roost-dev setup status    Show status of setup components
+    fireup setup [options]
+    fireup setup status    Show status of setup components
 
 OPTIONS:`)
 		fs.PrintDefaults()
 		fmt.Println(`
 DESCRIPTION:
-    Sets up roost-dev with all recommended components:
+    Sets up fireup with all recommended components:
 
-    1. Port forwarding - Forward ports 80/443 to roost-dev
+    1. Port forwarding - Forward ports 80/443 to fireup
        Lets you use http://myapp.test instead of http://localhost:9280
 
     2. HTTPS certificates - Generate a trusted local CA
        Enables https://myapp.test with no browser warnings
 
-    3. Background service - Start roost-dev automatically on login
-       roost-dev runs in the background so your apps are always ready
+    3. Background service - Start fireup automatically on login
+       fireup runs in the background so your apps are always ready
 
     The wizard explains each step before asking for your password.
     You can also run each step individually with the ports/cert/service commands.`)
@@ -445,10 +445,10 @@ DESCRIPTION:
 func cmdSetupStatus(args []string) {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Println(`roost-dev setup status - Show status of setup components
+			fmt.Println(`fireup setup status - Show status of setup components
 
 USAGE:
-    roost-dev setup status
+    fireup setup status
 
 Shows the status of:
 - Port forwarding (ports 80/443)
@@ -467,7 +467,7 @@ func runSetupComponentStatus() {
 	tld := globalCfg.TLD
 
 	fmt.Println()
-	fmt.Println("roost-dev setup status")
+	fmt.Println("fireup setup status")
 	fmt.Println("────────────────────────────────────────────────")
 
 	portsStatus, portsDetail := checkPortsStatus()
@@ -480,11 +480,11 @@ func runSetupComponentStatus() {
 	fmt.Printf("  Service   %s  %s\n", serviceStatus, serviceDetail)
 
 	fmt.Println("────────────────────────────────────────────────")
-	fmt.Printf("  Dashboard: http://roost-dev.%s\n", tld)
+	fmt.Printf("  Dashboard: http://fireup.%s\n", tld)
 	fmt.Println()
 }
 
-// cmdTeardown removes all roost-dev configuration
+// cmdTeardown removes all fireup configuration
 func cmdTeardown(args []string) {
 	fs := flag.NewFlagSet("teardown", flag.ExitOnError)
 
@@ -492,16 +492,16 @@ func cmdTeardown(args []string) {
 	fs.StringVar(&tld, "tld", "test", "Top-level domain to remove")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev teardown - Remove all roost-dev configuration
+		fmt.Println(`fireup teardown - Remove all fireup configuration
 
 USAGE:
-    roost-dev teardown [options]
+    fireup teardown [options]
 
 OPTIONS:`)
 		fs.PrintDefaults()
 		fmt.Println(`
 DESCRIPTION:
-    Removes all roost-dev components:
+    Removes all fireup components:
     - Stops and removes the background service
     - Removes HTTPS certificates and CA from trust store
     - Removes port forwarding rules
@@ -527,10 +527,10 @@ func cmdStatus(args []string) {
 	jsonOutput := fs.Bool("json", false, "Output in JSON format")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev status - Show status of configured apps
+		fmt.Println(`fireup status - Show status of configured apps
 
 USAGE:
-    roost-dev status [options] [filter]
+    fireup status [options] [filter]
 
 ARGUMENTS:
     filter            Optional filter to match app or service names (substring match)
@@ -542,12 +542,12 @@ Shows all configured apps, their running status, and URLs.
 Use --json for machine-readable output (same as /api/status).
 
 EXAMPLES:
-    roost-dev status              # Show all apps
-    roost-dev status family       # Filter to apps/services matching "family"
-    roost-dev status --json api   # JSON output filtered to "api"
+    fireup status              # Show all apps
+    fireup status family       # Filter to apps/services matching "family"
+    fireup status --json api   # JSON output filtered to "api"
 
 For setup component status (ports, cert, service), use:
-    roost-dev setup status`)
+    fireup setup status`)
 	}
 
 	// Check for help before parsing
@@ -704,7 +704,7 @@ func runStatus(jsonOutput bool, filter string) error {
 	globalCfg, configDir := getConfigWithDefaults()
 
 	// Try to get status from running server
-	url := fmt.Sprintf("http://roost-dev.%s/api/status", globalCfg.TLD)
+	url := fmt.Sprintf("http://fireup.%s/api/status", globalCfg.TLD)
 	resp, err := http.Get(url)
 	if err != nil {
 		if jsonOutput {
@@ -863,11 +863,11 @@ func runCommand(cmd, appName string) error {
 		fmt.Printf("Restarting %s...\n", appName)
 	}
 
-	// Make request to roost-dev API
-	url := fmt.Sprintf("http://roost-dev.%s/api/%s?name=%s", globalCfg.TLD, cmd, appName)
+	// Make request to fireup API
+	url := fmt.Sprintf("http://fireup.%s/api/%s?name=%s", globalCfg.TLD, cmd, appName)
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to connect to roost-dev: %v (is it running?)", err)
+		return fmt.Errorf("failed to connect to fireup: %v (is it running?)", err)
 	}
 	defer resp.Body.Close()
 
@@ -891,15 +891,15 @@ func runCommand(cmd, appName string) error {
 func runSetupWizard(configDir, tld string) {
 	printLogo()
 	fmt.Println()
-	fmt.Println("Welcome to roost-dev setup!")
+	fmt.Println("Welcome to fireup setup!")
 	fmt.Println()
-	fmt.Println("This wizard will configure roost-dev with three components:")
+	fmt.Println("This wizard will configure fireup with three components:")
 	fmt.Println()
 	fmt.Println("  1. PORT FORWARDING")
-	fmt.Println("     Redirects ports 80 and 443 to roost-dev, so you can access")
+	fmt.Println("     Redirects ports 80 and 443 to fireup, so you can access")
 	fmt.Println("     your apps at http://myapp.test instead of http://localhost:9280")
 	fmt.Println("     Requires: sudo")
-	fmt.Println("       - Writes to /etc/pf.anchors/roost-dev (firewall rules)")
+	fmt.Println("       - Writes to /etc/pf.anchors/fireup (firewall rules)")
 	fmt.Printf("       - Writes to /etc/resolver/%s (DNS resolution)\n", tld)
 	fmt.Println()
 	fmt.Println("  2. HTTPS CERTIFICATES")
@@ -909,10 +909,10 @@ func runSetupWizard(configDir, tld string) {
 	fmt.Println("       - Adds CA to /Library/Keychains/System.keychain")
 	fmt.Println()
 	fmt.Println("  3. BACKGROUND SERVICE")
-	fmt.Println("     Installs a LaunchAgent so roost-dev starts automatically")
+	fmt.Println("     Installs a LaunchAgent so fireup starts automatically")
 	fmt.Println("     when you log in. Your apps are always ready!")
 	fmt.Println("     Requires: nothing (runs as your user)")
-	fmt.Println("       - Writes to ~/Library/LaunchAgents/com.roost-dev.plist")
+	fmt.Println("       - Writes to ~/Library/LaunchAgents/com.fireup.plist")
 	fmt.Println()
 	fmt.Println("Each step will ask for confirmation before making changes.")
 	fmt.Println("Steps that need sudo will prompt for your password.")
@@ -920,10 +920,10 @@ func runSetupWizard(configDir, tld string) {
 	// Check for root AFTER showing overview so user understands the context
 	if os.Geteuid() == 0 {
 		fmt.Println()
-		fmt.Printf("%sError: Do not run 'roost-dev setup' with sudo.%s\n", colorRed, colorReset)
+		fmt.Printf("%sError: Do not run 'fireup setup' with sudo.%s\n", colorRed, colorReset)
 		fmt.Println()
 		fmt.Println("Run it as your normal user instead:")
-		fmt.Println("  roost-dev setup")
+		fmt.Println("  fireup setup")
 		os.Exit(1)
 	}
 
@@ -937,8 +937,8 @@ func runSetupWizard(configDir, tld string) {
 	if isPortForwardingInstalled(tld) {
 		if isPfPlistOutdated() {
 			fmt.Printf("%s⚠ Installed but config differs%s\n", colorYellow, colorReset)
-			fmt.Println("  Found: /etc/pf.anchors/roost-dev")
-			fmt.Println("  Found: /Library/LaunchDaemons/dev.roost.pfctl.plist (differs)")
+			fmt.Println("  Found: /etc/pf.anchors/fireup")
+			fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist (differs)")
 			fmt.Printf("  Found: /etc/resolver/%s\n", tld)
 			fmt.Println()
 			fmt.Println("Requires: sudo (will prompt for password)")
@@ -950,34 +950,34 @@ func runSetupWizard(configDir, tld string) {
 					fmt.Printf("%s✓ Port forwarding updated%s\n", colorGreen, colorReset)
 				}
 			} else {
-				fmt.Println("Skipped. You can update later with: roost-dev ports install")
+				fmt.Println("Skipped. You can update later with: fireup ports install")
 			}
 		} else {
 			fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
-			fmt.Println("  Found: /etc/pf.anchors/roost-dev")
-			fmt.Println("  Found: /Library/LaunchDaemons/dev.roost.pfctl.plist")
+			fmt.Println("  Found: /etc/pf.anchors/fireup")
+			fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
 			fmt.Printf("  Found: /etc/resolver/%s\n", tld)
 		}
 	} else {
 		fmt.Println("This step lets you access apps at http://myapp.test instead of")
 		fmt.Println("http://localhost:9280. It configures macOS packet filter (pf) to")
-		fmt.Println("redirect ports 80/443 to roost-dev.")
+		fmt.Println("redirect ports 80/443 to fireup.")
 		fmt.Println()
 		fmt.Println("Requires: sudo (will prompt for password)")
 
 		// Show summary and confirm (? shows full diff)
 		if confirmPortsInstall(tld, "Install port forwarding?") {
-			// Set ROOST_DEV_YES to skip the second confirmation in runPortsInstall
-			os.Setenv("ROOST_DEV_YES", "1")
+			// Set FIREUP_YES to skip the second confirmation in runPortsInstall
+			os.Setenv("FIREUP_YES", "1")
 			if err := runPortsInstall(configDir, tld); err != nil {
 				fmt.Printf("\n%s⚠ Port forwarding failed: %v%s\n", colorYellow, err, colorReset)
-				fmt.Println("You can retry later with: roost-dev ports install")
+				fmt.Println("You can retry later with: fireup ports install")
 			} else {
 				fmt.Printf("%s✓ Port forwarding installed%s\n", colorGreen, colorReset)
 			}
-			os.Unsetenv("ROOST_DEV_YES")
+			os.Unsetenv("FIREUP_YES")
 		} else {
-			fmt.Println("Skipped. You can run this later with: roost-dev ports install")
+			fmt.Println("Skipped. You can run this later with: fireup ports install")
 		}
 	}
 	fmt.Println()
@@ -1003,17 +1003,17 @@ func runSetupWizard(configDir, tld string) {
 		// Show summary and confirm (? shows full diff)
 		plan := certInstallPlan()
 		if confirmWithPlan(plan, "Install HTTPS certificates?") {
-			// Set ROOST_DEV_YES to skip the second confirmation in runCertInstall
-			os.Setenv("ROOST_DEV_YES", "1")
+			// Set FIREUP_YES to skip the second confirmation in runCertInstall
+			os.Setenv("FIREUP_YES", "1")
 			if err := runCertInstall(configDir, tld); err != nil {
 				fmt.Printf("\n%s⚠ Certificate setup failed: %v%s\n", colorYellow, err, colorReset)
-				fmt.Println("You can retry later with: roost-dev cert install")
+				fmt.Println("You can retry later with: fireup cert install")
 			} else {
 				fmt.Printf("%s✓ HTTPS certificates installed%s\n", colorGreen, colorReset)
 			}
-			os.Unsetenv("ROOST_DEV_YES")
+			os.Unsetenv("FIREUP_YES")
 		} else {
-			fmt.Println("Skipped. You can run this later with: roost-dev cert install")
+			fmt.Println("Skipped. You can run this later with: fireup cert install")
 		}
 	}
 	fmt.Println()
@@ -1026,34 +1026,34 @@ func runSetupWizard(configDir, tld string) {
 	installed, running := isServiceInstalled()
 	if installed {
 		fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
-		fmt.Println("  Found: ~/Library/LaunchAgents/com.roost-dev.plist")
+		fmt.Println("  Found: ~/Library/LaunchAgents/com.fireup.plist")
 		if running {
 			fmt.Println("  Status: running")
 		} else {
 			fmt.Printf("  %sStatus: not running%s\n", colorYellow, colorReset)
 		}
 	} else {
-		fmt.Println("This step makes roost-dev start automatically when you log in,")
+		fmt.Println("This step makes fireup start automatically when you log in,")
 		fmt.Println("so your apps are always accessible.")
 		fmt.Println()
-		fmt.Println("Will also start roost-dev immediately.")
+		fmt.Println("Will also start fireup immediately.")
 		fmt.Println()
 		fmt.Println("Requires: nothing (no sudo needed)")
 
 		// Show summary and confirm (? shows full diff)
 		plan := serviceInstallPlan()
 		if confirmWithPlan(plan, "Install background service?") {
-			// Set ROOST_DEV_YES to skip the second confirmation in runServiceInstall
-			os.Setenv("ROOST_DEV_YES", "1")
+			// Set FIREUP_YES to skip the second confirmation in runServiceInstall
+			os.Setenv("FIREUP_YES", "1")
 			if err := runServiceInstall(); err != nil {
 				fmt.Printf("\n%s⚠ Service install failed: %v%s\n", colorYellow, err, colorReset)
-				fmt.Println("You can retry later with: roost-dev service install")
+				fmt.Println("You can retry later with: fireup service install")
 			} else {
 				fmt.Printf("%s✓ Background service installed%s\n", colorGreen, colorReset)
 			}
-			os.Unsetenv("ROOST_DEV_YES")
+			os.Unsetenv("FIREUP_YES")
 		} else {
-			fmt.Println("Skipped. You can run this later with: roost-dev service install")
+			fmt.Println("Skipped. You can run this later with: fireup service install")
 		}
 	}
 	fmt.Println()
@@ -1063,22 +1063,22 @@ func runSetupWizard(configDir, tld string) {
 	fmt.Println()
 	fmt.Println("Setup complete!")
 	fmt.Println()
-	fmt.Printf("  Dashboard:  http://roost-dev.%s\n", tld)
-	fmt.Printf("  Dashboard:  https://roost-dev.%s (HTTPS)\n", tld)
+	fmt.Printf("  Dashboard:  http://fireup.%s\n", tld)
+	fmt.Printf("  Dashboard:  https://fireup.%s (HTTPS)\n", tld)
 	fmt.Println()
-	fmt.Println("Create app configs in ~/.config/roost-dev/")
-	fmt.Println("Run 'roost-dev status' to check component status.")
+	fmt.Println("Create app configs in ~/.config/fireup/")
+	fmt.Println("Run 'fireup status' to check component status.")
 	fmt.Println()
 	fmt.Println("Note: Restart your browser for HTTPS to work (quit fully and reopen).")
 }
 
-// runTeardownWizard removes all roost-dev configuration
+// runTeardownWizard removes all fireup configuration
 func runTeardownWizard(tld string) {
 	configDir := getDefaultConfigDir()
 
-	fmt.Println("roost-dev teardown")
+	fmt.Println("fireup teardown")
 	fmt.Println()
-	fmt.Println("This will remove all roost-dev components from your system.")
+	fmt.Println("This will remove all fireup components from your system.")
 	fmt.Println("Each step will ask for confirmation before making changes.")
 	fmt.Println()
 	fmt.Println("─────────────────────────────────────────────────────────────────")
@@ -1090,7 +1090,7 @@ func runTeardownWizard(tld string) {
 	installed, running := isServiceInstalled()
 	if !installed {
 		fmt.Printf("%s✓ Already removed%s\n", colorGreen, colorReset)
-		fmt.Println("  Not found: ~/Library/LaunchAgents/com.roost-dev.plist")
+		fmt.Println("  Not found: ~/Library/LaunchAgents/com.fireup.plist")
 	} else {
 		if running {
 			fmt.Println("Will also stop running service.")
@@ -1099,7 +1099,7 @@ func runTeardownWizard(tld string) {
 		plan := serviceUninstallPlan()
 		if confirmWithPlan(plan, "Remove background service?") {
 			// Unload the agent (ignore errors - may not be running)
-			exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.roost-dev", os.Getuid())).Run()
+			exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.fireup", os.Getuid())).Run()
 			if err := plan.Execute(); err != nil {
 				fmt.Printf("%s⚠ Service removal failed: %v%s\n", colorYellow, err, colorReset)
 			} else {
@@ -1121,7 +1121,7 @@ func runTeardownWizard(tld string) {
 		fmt.Printf("  Not found: %s/certs/\n", configDir)
 	} else {
 		fmt.Println("Note: The CA in your system keychain must be removed manually")
-		fmt.Println("      via Keychain Access (search for 'roost-dev Local CA')")
+		fmt.Println("      via Keychain Access (search for 'fireup Local CA')")
 		// Show summary and confirm (? shows full diff)
 		plan := certUninstallPlan()
 		if confirmWithPlan(plan, "Remove HTTPS certificates?") {
@@ -1145,20 +1145,20 @@ func runTeardownWizard(tld string) {
 	fmt.Println()
 	if !isPortForwardingInstalled(tld) {
 		fmt.Printf("%s✓ Already removed%s\n", colorGreen, colorReset)
-		fmt.Println("  Not found: /etc/pf.anchors/roost-dev")
-		fmt.Println("  Not found: /Library/LaunchDaemons/dev.roost.pfctl.plist")
+		fmt.Println("  Not found: /etc/pf.anchors/fireup")
+		fmt.Println("  Not found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
 		fmt.Printf("  Not found: /etc/resolver/%s\n", tld)
 	} else {
 		fmt.Println("Requires: sudo (will prompt for password)")
 		// Show summary and confirm (? shows full diff)
 		plan := portsUninstallPlan(tld)
 		if confirmWithPlan(plan, "Remove port forwarding?") {
-			// Set ROOST_DEV_YES to skip the second confirmation in runPortsUninstall
-			os.Setenv("ROOST_DEV_YES", "1")
+			// Set FIREUP_YES to skip the second confirmation in runPortsUninstall
+			os.Setenv("FIREUP_YES", "1")
 			if err := runPortsUninstall(tld); err != nil {
 				fmt.Printf("%s⚠ Port forwarding removal failed: %v%s\n", colorYellow, err, colorReset)
 			}
-			os.Unsetenv("ROOST_DEV_YES")
+			os.Unsetenv("FIREUP_YES")
 			// runPortsUninstall prints its own success message
 		} else {
 			fmt.Println("Skipped.")
@@ -1170,7 +1170,7 @@ func runTeardownWizard(tld string) {
 	fmt.Println()
 	fmt.Println("Teardown complete!")
 	fmt.Println()
-	fmt.Println("To reinstall, run: roost-dev setup")
+	fmt.Println("To reinstall, run: fireup setup")
 }
 
 // checkPortsStatus returns the status of port forwarding
@@ -1182,7 +1182,7 @@ func checkPortsStatus() (string, string) {
 
 	// Check if pf rules are loaded by checking if our anchor has rules
 	// Note: This requires root access, so it may fail even when forwarding works
-	cmd := exec.Command("/sbin/pfctl", "-a", "roost-dev", "-sr")
+	cmd := exec.Command("/sbin/pfctl", "-a", "fireup", "-sr")
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
 		return "✓", "80→9280, 443→9443"
@@ -1209,7 +1209,7 @@ func checkCertStatus() (string, string) {
 	}
 
 	// Check if CA is trusted (simplified check)
-	cmd := exec.Command("security", "find-certificate", "-c", "roost-dev Local CA", "/Library/Keychains/System.keychain")
+	cmd := exec.Command("security", "find-certificate", "-c", "fireup Local CA", "/Library/Keychains/System.keychain")
 	if err := cmd.Run(); err != nil {
 		return "⚠", "CA exists but may not be trusted"
 	}
@@ -1235,7 +1235,7 @@ func checkServiceStatus() (string, string) {
 
 	// Look for our service in the list
 	for _, line := range strings.Split(string(output), "\n") {
-		if strings.Contains(line, "com.roost-dev") {
+		if strings.Contains(line, "com.fireup") {
 			parts := strings.Fields(line)
 			if len(parts) >= 3 {
 				pid := parts[0]

@@ -25,10 +25,10 @@ func cmdLogs(args []string) {
 	fs.IntVar(&lines, "n", 0, "Number of lines to show (0 = all available)")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev logs - View logs from roost-dev or apps
+		fmt.Println(`fireup logs - View logs from fireup or apps
 
 USAGE:
-    roost-dev logs [options] [app-name]
+    fireup logs [options] [app-name]
 
 OPTIONS:
   -f            Follow log output (poll for new logs)
@@ -36,13 +36,13 @@ OPTIONS:
   --server      Show server logs instead of app logs
 
 EXAMPLES:
-    roost-dev logs                  Show server request logs
-    roost-dev logs myapp            Show logs for myapp
-    roost-dev logs -f myapp         Follow myapp logs
-    roost-dev logs --server         Show server logs (same as no args)
-    roost-dev logs -n 50 myapp      Show last 50 lines of myapp logs
+    fireup logs                  Show server request logs
+    fireup logs myapp            Show logs for myapp
+    fireup logs -f myapp         Follow myapp logs
+    fireup logs --server         Show server logs (same as no args)
+    fireup logs -n 50 myapp      Show last 50 lines of myapp logs
 
-Requires the roost-dev server to be running.`)
+Requires the fireup server to be running.`)
 	}
 
 	// Check for help before parsing
@@ -77,14 +77,14 @@ Requires the roost-dev server to be running.`)
 func runLogsOnce(tld, appName string, server bool, maxLines int) error {
 	var url string
 	if server || appName == "" {
-		url = fmt.Sprintf("http://roost-dev.%s/api/server-logs", tld)
+		url = fmt.Sprintf("http://fireup.%s/api/server-logs", tld)
 	} else {
-		url = fmt.Sprintf("http://roost-dev.%s/api/logs?name=%s", tld, appName)
+		url = fmt.Sprintf("http://fireup.%s/api/logs?name=%s", tld, appName)
 	}
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to connect to roost-dev: %v (is it running?)", err)
+		return fmt.Errorf("failed to connect to fireup: %v (is it running?)", err)
 	}
 	defer resp.Body.Close()
 
@@ -133,15 +133,15 @@ func runLogsFollow(tld, appName string, server bool, maxLines int) {
 		case <-ticker.C:
 			var url string
 			if server || appName == "" {
-				url = fmt.Sprintf("http://roost-dev.%s/api/server-logs", tld)
+				url = fmt.Sprintf("http://fireup.%s/api/server-logs", tld)
 			} else {
-				url = fmt.Sprintf("http://roost-dev.%s/api/logs?name=%s", tld, appName)
+				url = fmt.Sprintf("http://fireup.%s/api/logs?name=%s", tld, appName)
 			}
 
 			resp, err := http.Get(url)
 			if err != nil {
 				if firstRun {
-					fmt.Fprintf(os.Stderr, "Error: failed to connect to roost-dev: %v (is it running?)\n", err)
+					fmt.Fprintf(os.Stderr, "Error: failed to connect to fireup: %v (is it running?)\n", err)
 					os.Exit(1)
 				}
 				continue // Transient error, keep trying

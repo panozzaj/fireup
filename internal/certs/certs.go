@@ -80,8 +80,8 @@ func GenerateCA(certsDir string) error {
 	template := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"roost-dev"},
-			CommonName:   "roost-dev Local CA",
+			Organization: []string{"fireup"},
+			CommonName:   "fireup Local CA",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0), // Valid for 10 years
@@ -228,7 +228,7 @@ func (m *Manager) generateCert(domain string) (*tls.Certificate, error) {
 	template := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"roost-dev"},
+			Organization: []string{"fireup"},
 			CommonName:   domain,
 		},
 		NotBefore:   time.Now(),

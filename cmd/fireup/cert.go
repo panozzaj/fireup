@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/panozzaj/roost-dev/internal/certs"
-	"github.com/panozzaj/roost-dev/internal/diff"
+	"github.com/panozzaj/fireup/internal/certs"
+	"github.com/panozzaj/fireup/internal/diff"
 )
 
 func cmdCert(args []string) {
@@ -39,10 +39,10 @@ func cmdCert(args []string) {
 }
 
 func printCertUsage() {
-	fmt.Println(`roost-dev cert - Manage HTTPS certificates
+	fmt.Println(`fireup cert - Manage HTTPS certificates
 
 USAGE:
-    roost-dev cert <command>
+    fireup cert <command>
 
 COMMANDS:
     install     Generate CA and trust it (requires sudo for trust)
@@ -50,7 +50,7 @@ COMMANDS:
     status      Show certificate status
 
 DESCRIPTION:
-    Generates a local Certificate Authority (CA) that roost-dev uses to
+    Generates a local Certificate Authority (CA) that fireup uses to
     dynamically create certificates for any domain. After running 'cert install':
 
     - https://myapp.test will work (any domain!)
@@ -58,8 +58,8 @@ DESCRIPTION:
     - No browser warnings
 
 EXAMPLES:
-    roost-dev cert install    # Generate CA and enable HTTPS
-    roost-dev cert status     # Check certificate status`)
+    fireup cert install    # Generate CA and enable HTTPS
+    fireup cert status     # Check certificate status`)
 }
 
 func cmdCertInstall(args []string) {
@@ -72,17 +72,17 @@ func cmdCertInstall(args []string) {
 	fs.StringVar(&configDir, "dir", getDefaultConfigDir(), "Configuration directory")
 
 	fs.Usage = func() {
-		fmt.Println(`roost-dev cert install - Generate and trust the roost-dev CA
+		fmt.Println(`fireup cert install - Generate and trust the fireup CA
 
 USAGE:
-    roost-dev cert install [options]
+    fireup cert install [options]
 
 OPTIONS:`)
 		fs.PrintDefaults()
 		fmt.Println(`
 DESCRIPTION:
     Generates a local Certificate Authority (CA) and installs it into
-    your system trust store. roost-dev then uses this CA to dynamically
+    your system trust store. fireup then uses this CA to dynamically
     generate certificates for any domain on-the-fly.
 
     After running this:
@@ -113,12 +113,12 @@ DESCRIPTION:
 }
 
 func cmdCertUninstall(args []string) {
-	if checkHelpFlag(args, `roost-dev cert uninstall - Remove HTTPS certificates
+	if checkHelpFlag(args, `fireup cert uninstall - Remove HTTPS certificates
 
 USAGE:
-    roost-dev cert uninstall
+    fireup cert uninstall
 
-Removes the roost-dev CA and certificates from the config directory.
+Removes the fireup CA and certificates from the config directory.
 Also removes the CA from the system trust store (requires sudo).`) {
 		os.Exit(0)
 	}
@@ -129,10 +129,10 @@ Also removes the CA from the system trust store (requires sudo).`) {
 }
 
 func cmdCertStatus(args []string) {
-	if checkHelpFlag(args, `roost-dev cert status - Show certificate status
+	if checkHelpFlag(args, `fireup cert status - Show certificate status
 
 USAGE:
-    roost-dev cert status
+    fireup cert status
 
 Shows whether certificates are installed and their details.`) {
 		os.Exit(0)
@@ -173,7 +173,7 @@ func runCertInstall(configDir, tld string) error {
 	caPath := filepath.Join(certsDir, "ca.pem")
 	if _, err := os.Stat(caPath); err == nil {
 		fmt.Printf("CA already exists: %s\n", caPath)
-		fmt.Println("To regenerate, run 'roost-dev cert uninstall' first.")
+		fmt.Println("To regenerate, run 'fireup cert uninstall' first.")
 		return nil
 	}
 
@@ -190,7 +190,7 @@ func runCertInstall(configDir, tld string) error {
 	}
 
 	// Generate CA
-	fmt.Println("Generating roost-dev CA...")
+	fmt.Println("Generating fireup CA...")
 	if err := certs.GenerateCA(certsDir); err != nil {
 		return fmt.Errorf("generating CA: %w", err)
 	}
@@ -225,13 +225,13 @@ func runCertInstall(configDir, tld string) error {
 	fmt.Println("Any *.test domain will automatically get a valid certificate.")
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  1. Restart roost-dev:")
-	fmt.Println("     roost-dev service uninstall && roost-dev service install")
+	fmt.Println("  1. Restart fireup:")
+	fmt.Println("     fireup service uninstall && fireup service install")
 	fmt.Println()
 	fmt.Println("  2. Restart your browser (quit fully and reopen)")
 	fmt.Println("     This is needed for browsers to trust the new CA.")
 	fmt.Println()
-	fmt.Printf("Then visit: https://roost-dev.%s\n", tld)
+	fmt.Printf("Then visit: https://fireup.%s\n", tld)
 
 	return nil
 }
@@ -301,6 +301,6 @@ func runCertStatus() {
 		fmt.Println("Certificates are generated on-demand for each domain.")
 	} else {
 		fmt.Println("Status: HTTPS not configured")
-		fmt.Println("  Run 'roost-dev cert install' to enable HTTPS")
+		fmt.Println("  Run 'fireup cert install' to enable HTTPS")
 	}
 }

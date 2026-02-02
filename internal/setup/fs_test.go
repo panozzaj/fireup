@@ -97,7 +97,7 @@ func TestIsPortForwardingInstalled(t *testing.T) {
 
 	t.Run("returns false when only anchor exists", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/roost-dev", []byte("rules"))
+		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
 		checker := &Checker{FS: fs}
 
 		if checker.IsPortForwardingInstalled("test") {
@@ -107,7 +107,7 @@ func TestIsPortForwardingInstalled(t *testing.T) {
 
 	t.Run("returns false when LaunchDaemon missing", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/roost-dev", []byte("rules"))
+		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
 		fs.AddFile("/etc/resolver/test", []byte("nameserver"))
 		checker := &Checker{FS: fs}
 
@@ -118,8 +118,8 @@ func TestIsPortForwardingInstalled(t *testing.T) {
 
 	t.Run("returns false when resolver missing", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/roost-dev", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.roost.pfctl.plist", []byte("plist"))
+		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
+		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
 		checker := &Checker{FS: fs}
 
 		if checker.IsPortForwardingInstalled("test") {
@@ -129,8 +129,8 @@ func TestIsPortForwardingInstalled(t *testing.T) {
 
 	t.Run("returns true when all files exist", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/roost-dev", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.roost.pfctl.plist", []byte("plist"))
+		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
+		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
 		fs.AddFile("/etc/resolver/test", []byte("nameserver"))
 		checker := &Checker{FS: fs}
 
@@ -141,8 +141,8 @@ func TestIsPortForwardingInstalled(t *testing.T) {
 
 	t.Run("uses correct TLD for resolver path", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/roost-dev", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.roost.pfctl.plist", []byte("plist"))
+		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
+		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
 		fs.AddFile("/etc/resolver/dev", []byte("nameserver"))
 		checker := &Checker{FS: fs}
 
@@ -198,11 +198,11 @@ func TestIsCertInstalled(t *testing.T) {
 
 	t.Run("uses correct config directory", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/home/user/.config/roost-dev/certs/ca-key.pem", []byte("key"))
-		fs.AddFile("/home/user/.config/roost-dev/certs/ca.pem", []byte("cert"))
+		fs.AddFile("/home/user/.config/fireup/certs/ca-key.pem", []byte("key"))
+		fs.AddFile("/home/user/.config/fireup/certs/ca.pem", []byte("cert"))
 		checker := &Checker{FS: fs}
 
-		if !checker.IsCertInstalled("/home/user/.config/roost-dev") {
+		if !checker.IsCertInstalled("/home/user/.config/fireup") {
 			t.Error("expected true with full config path")
 		}
 		if checker.IsCertInstalled("/other/config") {
@@ -223,7 +223,7 @@ func TestIsServiceInstalled(t *testing.T) {
 
 	t.Run("returns true when plist exists", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/Users/testuser/Library/LaunchAgents/com.roost-dev.plist", []byte("plist"))
+		fs.AddFile("/Users/testuser/Library/LaunchAgents/com.fireup.plist", []byte("plist"))
 		checker := &Checker{FS: fs}
 
 		if !checker.IsServiceInstalled("/Users/testuser") {
@@ -233,7 +233,7 @@ func TestIsServiceInstalled(t *testing.T) {
 
 	t.Run("uses correct home directory", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/Users/alice/Library/LaunchAgents/com.roost-dev.plist", []byte("plist"))
+		fs.AddFile("/Users/alice/Library/LaunchAgents/com.fireup.plist", []byte("plist"))
 		checker := &Checker{FS: fs}
 
 		if !checker.IsServiceInstalled("/Users/alice") {

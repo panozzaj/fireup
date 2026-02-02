@@ -2,7 +2,7 @@
 
 ## Problem
 
-Services without HTTP endpoints (daemons, background workers, collectors) show as yellow in the dashboard because roost-dev can't confirm they're "ready" - it only knows the process is alive.
+Services without HTTP endpoints (daemons, background workers, collectors) show as yellow in the dashboard because fireup can't confirm they're "ready" - it only knows the process is alive.
 
 ## Current Behavior
 
@@ -26,7 +26,7 @@ services:
 
 ### Health Check Types
 
-1. **file** - Service touches a file when ready, roost-dev watches for it
+1. **file** - Service touches a file when ready, fireup watches for it
 2. **tcp** - Service listens on a port (doesn't need HTTP, just accepts connection)
 3. **exec** - Run a command, success = healthy
 4. **none** - Explicitly opt out, stay yellow (this is fine)

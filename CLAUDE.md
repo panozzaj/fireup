@@ -1,11 +1,11 @@
-# roost-dev
+# fireup
 
-## Managing roost-dev during development
+## Managing fireup during development
 
-There are TWO versions of roost-dev:
+There are TWO versions of fireup:
 
-1. **Installed version**: `/Users/anthony/go/bin/roost-dev` (managed by launchd)
-2. **Local build**: `/Users/anthony/Documents/dev/roost-dev/roost-dev`
+1. **Installed version**: `/Users/anthony/go/bin/fireup` (managed by launchd)
+2. **Local build**: `/Users/anthony/Documents/dev/fireup/fireup`
 
 ### Use restart script
 
@@ -18,13 +18,13 @@ There are TWO versions of roost-dev:
 
 ```bash
 # Stop the background service
-launchctl bootout gui/$(id -u)/com.roost-dev
+launchctl bootout gui/$(id -u)/com.fireup
 
 # Reinstall the service (writes new plist and loads it)
-./roost-dev service install
+./fireup service install
 
 # Or if using installed version:
-roost-dev service install
+fireup service install
 ```
 
 The `service install` command captures your current `PATH`, `HOME`, `USER`, etc. and writes them to the LaunchAgent plist. This ensures spawned processes have access to tools like nvm, rbenv, etc.
@@ -33,10 +33,10 @@ The `service install` command captures your current `PATH`, `HOME`, `USER`, etc.
 
 ```bash
 # Interactive setup (port forwarding, CA cert, background service)
-roost-dev setup
+fireup setup
 
 # Interactive teardown (reverse of setup)
-roost-dev teardown
+fireup teardown
 ```
 
 Both wizards prompt for confirmation before each step and show which steps are already done.
@@ -45,19 +45,19 @@ Both wizards prompt for confirmation before each step and show which steps are a
 
 ```bash
 # View server request logs
-curl -s "http://roost-dev.test/api/server-logs" | jq -r '.[]'
+curl -s "http://fireup.test/api/server-logs" | jq -r '.[]'
 ```
 
 ## Code patterns
 
 - **Use non-blocking operations in HTTP handlers.** For process management, prefer `StartAsync()` over `Start()` in API handlers so responses return immediately. The dashboard polls for status updates.
 - **Avoid holding mutexes while waiting.** Release locks before any operation that could block (network calls, waiting for ports, etc.).
-- **Always background server processes.** When starting roost-dev from bash, use `run_in_background: true` or append `&` to avoid blocking the conversation. Use `tee` to capture output: `/path/to/roost-dev 2>&1 | tee ./tmp/roost-dev.log &`
+- **Always background server processes.** When starting fireup from bash, use `run_in_background: true` or append `&` to avoid blocking the conversation. Use `tee` to capture output: `/path/to/fireup 2>&1 | tee ./tmp/fireup.log &`
 
 ## Useful URLs
 
-- **Dashboard**: http://roost-dev.test
-- **Icon test page**: http://roost-dev.test/icons (for previewing icon options)
+- **Dashboard**: http://fireup.test
+- **Icon test page**: http://fireup.test/icons (for previewing icon options)
 
 ## UI patterns
 

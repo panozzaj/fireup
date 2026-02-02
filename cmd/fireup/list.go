@@ -31,12 +31,12 @@ type SvcStatus struct {
 
 // cmdList handles the 'list' command (alias for status)
 func cmdList(args []string) {
-	if checkHelpFlag(args, `roost-dev list - List configured apps and their status
+	if checkHelpFlag(args, `fireup list - List configured apps and their status
 
 USAGE:
-    roost-dev list [--json]
+    fireup list [--json]
 
-This command is an alias for 'roost-dev status'.
+This command is an alias for 'fireup status'.
 Shows all configured apps, their running status, and URLs.
 Use --json for machine-readable output.`) {
 		os.Exit(0)
@@ -87,7 +87,7 @@ func listConfigFiles(configDir, tld string) error {
 		url := fmt.Sprintf("http://%s.%s", app, tld)
 		fmt.Printf("%-20s %s\n", app, url)
 	}
-	fmt.Println("\nStart the server with: roost-dev serve")
+	fmt.Println("\nStart the server with: fireup serve")
 
 	return nil
 }

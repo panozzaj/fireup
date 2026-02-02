@@ -32,7 +32,7 @@ func checkHelpFlag(args []string, usage string) bool {
 // getDefaultConfigDir returns the default configuration directory path.
 func getDefaultConfigDir() string {
 	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".config", "roost-dev")
+	return filepath.Join(homeDir, ".config", "fireup")
 }
 
 // getConfigWithDefaults loads the global config, returning defaults if not found.

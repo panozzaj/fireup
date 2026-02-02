@@ -2,9 +2,9 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -o ./roost-dev ./cmd/roost-dev/"
-bin = "./roost-dev"
-full_bin = "./roost-dev"
+cmd = "go build -o ./fireup ./cmd/fireup/"
+bin = "./fireup"
+full_bin = "./fireup"
 include_ext = ["go"]
 exclude_dir = ["tmp", "vendor"]
 exclude_regex = ["_test\\.go"]

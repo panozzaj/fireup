@@ -4,8 +4,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/panozzaj/roost-dev/internal/icons"
-	"github.com/panozzaj/roost-dev/internal/styles"
+	"github.com/panozzaj/fireup/internal/icons"
+	"github.com/panozzaj/fireup/internal/styles"
 )
 
 // welcomeData contains data for the welcome page template
@@ -39,7 +39,7 @@ const welcomeHTML = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>roost-dev is working!</title>
+    <title>fireup is working!</title>
 {{.ThemeScript}}
     <style>
 {{.ThemeCSS}}
@@ -152,7 +152,7 @@ const welcomeHTML = `<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="checkmark">{{.IconCheck}}</div>
-        <h1>roost-dev is working!</h1>
+        <h1>fireup is working!</h1>
         <p class="subtitle">Your local development proxy is ready to use.</p>
 
         <div class="card">
@@ -174,8 +174,8 @@ const welcomeHTML = `<!DOCTYPE html>
         </div>
 
         <div class="links">
-            <a href="//roost-dev.{{.TLD}}">Open Dashboard</a>
-            <a href="//roost-dev.{{.TLD}}" onclick="event.preventDefault(); navigator.clipboard.writeText('roost-dev docs')">Copy docs command</a>
+            <a href="//fireup.{{.TLD}}">Open Dashboard</a>
+            <a href="//fireup.{{.TLD}}" onclick="event.preventDefault(); navigator.clipboard.writeText('fireup docs')">Copy docs command</a>
         </div>
     </div>
 </body>
