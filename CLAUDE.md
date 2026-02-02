@@ -58,6 +58,7 @@ curl -s "http://fireup.test/api/server-logs" | jq -r '.[]'
 
 - **Dashboard**: http://fireup.test
 - **Icon test page**: http://fireup.test/icons (for previewing icon options)
+- **ASCII logo generator**: https://patorjk.com/software/taag/#p=testall&t=fireup (for CLI logo)
 
 ## UI patterns
 

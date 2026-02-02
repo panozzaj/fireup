@@ -2,25 +2,37 @@ package logo
 
 import "strings"
 
-// Base logo with no leading spaces on first line
-const base = `    _____
-   / __(_)_______  __  ______
-  / /_/ / ___/ _ \/ / / / __ \
- / __/ / /  /  __/ /_/ / /_/ /
-/_/ /_/_/   \___/\__,_/ .___/
-                     /_/`
+// Base logo - relative spacing between lines is intentional for F shape
+const base = `  _____  __
+ / ____\|__|_______  ____  __ __ _____
+ |  __\ |  |\_  __ \/ __ \|  |  \\ __ \
+ |  |   |  | |  | \/  ___/|  |  /| |_| |
+ |__|   |__| |__|   \___/ |____/ |  __/
+                                 |_|`
 
-// Get returns the logo with specified leading spaces on the first line
+// Get returns the logo with specified leading spaces on each line
 func Get(indent int) string {
-	return strings.Repeat(" ", indent) + base
+	prefix := strings.Repeat(" ", indent)
+	lines := strings.Split(base, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }
 
-// CLI returns logo formatted for terminal output (26 spaces)
+// CLI returns logo formatted for terminal output
 func CLI() string {
-	return Get(26)
+	return Get(4)
 }
 
-// Web returns logo formatted for web/HTML output (17 spaces)
+// Web returns logo formatted for web/HTML output with non-breaking spaces
 func Web() string {
-	return Get(17)
+	lines := strings.Split(base, "\n")
+	for i, line := range lines {
+		// Count leading spaces and replace with &nbsp;
+		trimmed := strings.TrimLeft(line, " ")
+		leadingSpaces := len(line) - len(trimmed)
+		lines[i] = strings.Repeat("&nbsp;", leadingSpaces) + trimmed
+	}
+	return strings.Join(lines, "\n")
 }
