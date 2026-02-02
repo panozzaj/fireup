@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +39,25 @@ func isServiceInstalled() (bool, bool) {
 		return true, false
 	}
 	return true, true
+}
+
+// restartServiceIfRunning restarts the background service if it's currently running.
+// This is useful after installing certs so the server picks up the new CA.
+func restartServiceIfRunning() {
+	_, running := isServiceInstalled()
+	if !running {
+		return
+	}
+
+	uid := os.Getuid()
+	homeDir, _ := os.UserHomeDir()
+	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.fireup.plist")
+
+	// Restart by bootout + bootstrap
+	exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/com.fireup", uid)).Run()
+	exec.Command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", uid), plistPath).Run()
+
+	fmt.Println("Restarted background service to pick up new certificates")
 }
 
 // isPfPlistOutdated checks if the pf LaunchDaemon plist differs from expected.

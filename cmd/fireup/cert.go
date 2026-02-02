@@ -110,6 +110,9 @@ DESCRIPTION:
 	if err := runCertInstall(configDir, tld); err != nil {
 		log.Fatalf("Certificate install failed: %v", err)
 	}
+
+	// Restart service if running so it picks up the new CA
+	restartServiceIfRunning()
 }
 
 func cmdCertUninstall(args []string) {

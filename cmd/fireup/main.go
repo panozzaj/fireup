@@ -1010,6 +1010,8 @@ func runSetupWizard(configDir, tld string) {
 				fmt.Println("You can retry later with: fireup cert install")
 			} else {
 				fmt.Printf("%s✓ HTTPS certificates installed%s\n", colorGreen, colorReset)
+				// Restart service if running so it picks up the new CA
+				restartServiceIfRunning()
 			}
 			os.Unsetenv("FIREUP_YES")
 		} else {
