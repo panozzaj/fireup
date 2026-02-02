@@ -3,11 +3,12 @@ package logo
 import "strings"
 
 // Base logo with no leading spaces on first line
-const base = `__            __
-   _________  ____  _____/ /_      ____/ /__ _   __
-  / ___/ __ \/ __ \/ ___/ __/_____/ __  / _ \ | / /
- / /  / /_/ / /_/ (__  ) /_/_____/ /_/ /  __/ |/ /
-/_/   \____/\____/____/\__/      \__,_/\___/|___/`
+const base = `    _____
+   / __(_)_______  __  ______
+  / /_/ / ___/ _ \/ / / / __ \
+ / __/ / /  /  __/ /_/ / /_/ /
+/_/ /_/_/   \___/\__,_/ .___/
+                     /_/`
 
 // Get returns the logo with specified leading spaces on the first line
 func Get(indent int) string {
