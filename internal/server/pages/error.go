@@ -62,6 +62,8 @@ body {
     margin-bottom: 40px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    display: inline-block;
+    text-align: left;
 }
 .logo a {
     color: var(--text-muted);
