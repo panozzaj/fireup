@@ -722,6 +722,14 @@ func (m *Manager) Get(name string) (*Process, bool) {
 	return proc, ok
 }
 
+// Remove removes a process from the manager without stopping it.
+// Use this to clean up failed/stopped processes that are no longer needed.
+func (m *Manager) Remove(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.processes, name)
+}
+
 // All returns all running processes
 func (m *Manager) All() []*Process {
 	m.mu.RLock()

@@ -117,12 +117,18 @@ func New(cfg *config.Config) (*Server, error) {
 		// Collect process names for apps after reload
 		newProcessNames := s.collectProcessNames()
 
-		// Stop processes for removed apps
+		// Clean up processes for removed apps (running, starting, or failed)
 		for name := range oldProcessNames {
 			if _, exists := newProcessNames[name]; !exists {
-				if proc, found := s.procs.Get(name); found && proc.IsRunning() {
-					s.logRequest("Stopping orphaned process: %s", name)
-					s.procs.Stop(name)
+				if proc, found := s.procs.Get(name); found {
+					if proc.IsRunning() || proc.IsStarting() {
+						s.logRequest("Stopping orphaned process: %s", name)
+						s.procs.Stop(name)
+					} else {
+						// Remove failed/stopped processes for removed services
+						s.logRequest("Removing orphaned process: %s", name)
+						s.procs.Remove(name)
+					}
 				}
 			}
 		}
