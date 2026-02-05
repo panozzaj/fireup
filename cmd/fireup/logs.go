@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 )
 
 func cmdLogs(args []string) {
@@ -110,11 +114,68 @@ func runLogsOnce(tld, appName string, server bool, maxLines int) error {
 		logLines = logLines[len(logLines)-maxLines:]
 	}
 
+	lp := newLogPrinter()
 	for _, line := range logLines {
-		fmt.Println(line)
+		lp.Println(line)
 	}
 
 	return nil
+}
+
+// logPrinter handles colorized log output.
+type logPrinter struct {
+	colorize bool
+	colors   map[string]string
+	w        io.Writer
+}
+
+// newLogPrinter creates a log printer that colorizes prefixes when stdout is a terminal.
+func newLogPrinter() *logPrinter {
+	return &logPrinter{
+		colorize: term.IsTerminal(int(os.Stdout.Fd())),
+		colors:   make(map[string]string),
+		w:        os.Stdout,
+	}
+}
+
+// log prefix colors, cycled per unique prefix name
+var prefixColors = []string{
+	colorCyan,
+	colorMagenta,
+	colorGreen,
+	colorBlue,
+	colorBrightRed,
+	colorYellow,
+}
+
+// Println prints a log line, colorizing any leading [prefix].
+func (lp *logPrinter) Println(line string) {
+	if !lp.colorize {
+		fmt.Fprintln(lp.w, line)
+		return
+	}
+
+	// Look for leading [prefix]
+	if strings.HasPrefix(line, "[") {
+		if idx := strings.Index(line, "] "); idx > 0 {
+			prefix := line[1:idx]
+			rest := line[idx+2:]
+
+			color, ok := lp.colors[prefix]
+			if !ok {
+				color = prefixColors[len(lp.colors)%len(prefixColors)]
+				lp.colors[prefix] = color
+			}
+
+			// Reset before prefix so it renders cleanly even if previous line
+			// left ANSI state open. Don't reset after content so app styling
+			// (e.g. bold spanning lines) flows naturally until the next prefix.
+			fmt.Fprintf(lp.w, "%s%s[%s]%s %s\n", colorReset, color, prefix, colorReset, rest)
+			return
+		}
+	}
+
+	fmt.Fprintln(lp.w, line)
 }
 
 // runLogsFollow continuously polls and prints new logs
@@ -122,6 +183,7 @@ func runLogsFollow(tld, appName string, server bool, maxLines int) {
 	// Track what we've already printed to avoid duplicates
 	var lastLen int
 	firstRun := true
+	lp := newLogPrinter()
 
 	// Handle Ctrl+C gracefully
 	sigCh := make(chan os.Signal, 1)
@@ -163,20 +225,20 @@ func runLogsFollow(tld, appName string, server bool, maxLines int) {
 					startIdx = len(logLines) - maxLines
 				}
 				for i := startIdx; i < len(logLines); i++ {
-					fmt.Println(logLines[i])
+					lp.Println(logLines[i])
 				}
 				lastLen = len(logLines)
 				firstRun = false
 			} else if len(logLines) > lastLen {
 				// Print only new lines
 				for i := lastLen; i < len(logLines); i++ {
-					fmt.Println(logLines[i])
+					lp.Println(logLines[i])
 				}
 				lastLen = len(logLines)
 			} else if len(logLines) < lastLen {
 				// Buffer wrapped, print all new content
 				for _, line := range logLines {
-					fmt.Println(line)
+					lp.Println(line)
 				}
 				lastLen = len(logLines)
 			}
