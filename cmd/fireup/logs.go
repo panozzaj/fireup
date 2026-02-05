@@ -58,9 +58,14 @@ Requires the fireup server to be running.`)
 	globalCfg, _ := getConfigWithDefaults()
 	appName := fs.Arg(0)
 
-	// If no app name and not explicitly --server, default to server logs
-	if appName == "" {
-		server = true
+	// If no app name and --server not explicitly set, try CWD resolution
+	if appName == "" && !server {
+		if resolved, found := resolveAppFromCwd(); found {
+			fmt.Fprintf(os.Stderr, "(detected %s from current directory)\n", resolved)
+			appName = resolved
+		} else {
+			server = true
+		}
 	}
 
 	if follow {

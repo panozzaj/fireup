@@ -142,7 +142,8 @@ func main() {
 
 func printMainUsage() {
 	printLogo()
-	fmt.Println(`
+	var sb strings.Builder
+	sb.WriteString(`
 fireup - Local development proxy for all your projects
 
 USAGE:
@@ -176,6 +177,9 @@ HELP:
 QUICK START:
     fireup setup               # Interactive setup wizard
     # Then visit http://fireup.test`)
+
+	printCurrentProjectSection(&sb)
+	fmt.Print(sb.String())
 }
 
 // cmdServe handles the 'serve' command
@@ -375,8 +379,13 @@ Requires the fireup server to be running.
 	}
 
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: fireup %s <app-name>\n", action)
-		os.Exit(1)
+		if appName, found := resolveAppFromCwd(); found {
+			fmt.Fprintf(os.Stderr, "(detected %s from current directory)\n", appName)
+			args = []string{appName}
+		} else {
+			fmt.Fprintf(os.Stderr, "Usage: fireup %s <app-name>\n", action)
+			os.Exit(1)
+		}
 	}
 
 	if err := runCommand(action, args[0]); err != nil {

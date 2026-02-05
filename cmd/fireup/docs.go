@@ -48,12 +48,18 @@ Output is paged if running in a terminal.`)
 		os.Exit(1)
 	}
 
+	// Append project section if CWD matches a project
+	var sb strings.Builder
+	printCurrentProjectSection(&sb)
+	projectSection := sb.String()
+	fullContent := string(content) + projectSection
+
 	// If stdout is a terminal, use a pager
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		pager := getPager()
 		if pager != "" {
 			cmd := exec.Command(pager)
-			cmd.Stdin = strings.NewReader(string(content))
+			cmd.Stdin = strings.NewReader(fullContent)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err == nil {
@@ -64,7 +70,7 @@ Output is paged if running in a terminal.`)
 	}
 
 	// Direct output (non-terminal or no pager)
-	os.Stdout.Write(content)
+	fmt.Print(fullContent)
 }
 
 // getPager returns the pager command to use
