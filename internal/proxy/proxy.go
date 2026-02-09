@@ -2,12 +2,15 @@ package proxy
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ReverseProxy handles proxying requests to backend services
@@ -95,6 +98,12 @@ func NewReverseProxy(port int, theme string) *ReverseProxy {
 	}
 }
 
+// isWebSocketUpgrade checks if the request is a WebSocket upgrade
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
 // ServeHTTP implements http.Handler
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Store original host for the backend
@@ -104,7 +113,70 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Header.Set("X-Forwarded-Proto", "https")
 	}
 
+	// WebSocket requests need raw TCP relay since httputil.ReverseProxy
+	// doesn't handle the Connection: Upgrade protocol
+	if isWebSocketUpgrade(r) {
+		p.serveWebSocket(w, r)
+		return
+	}
+
 	p.proxy.ServeHTTP(w, r)
+}
+
+// serveWebSocket handles WebSocket upgrade requests by hijacking the client
+// connection and relaying bytes bidirectionally to the backend
+func (p *ReverseProxy) serveWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Dial the backend
+	backendAddr := p.target.Host
+	backendConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
+	if err != nil {
+		http.Error(w, "Backend unavailable", http.StatusBadGateway)
+		return
+	}
+	defer backendConn.Close()
+
+	// Hijack the client connection
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "WebSocket hijack not supported", http.StatusInternalServerError)
+		return
+	}
+	clientConn, clientBuf, err := hijacker.Hijack()
+	if err != nil {
+		http.Error(w, "WebSocket hijack failed", http.StatusInternalServerError)
+		return
+	}
+	defer clientConn.Close()
+
+	// Rewrite the request URL to point to the backend and forward it
+	r.URL.Scheme = "http"
+	r.URL.Host = p.target.Host
+	r.Header.Set("Host", p.target.Host)
+	if err := r.Write(backendConn); err != nil {
+		return
+	}
+
+	// Flush any buffered data from the client
+	if clientBuf.Reader.Buffered() > 0 {
+		buffered := make([]byte, clientBuf.Reader.Buffered())
+		if _, err := clientBuf.Read(buffered); err == nil {
+			backendConn.Write(buffered)
+		}
+	}
+
+	// Bidirectional relay
+	done := make(chan struct{}, 2)
+	go func() {
+		io.Copy(clientConn, backendConn)
+		done <- struct{}{}
+	}()
+	go func() {
+		io.Copy(backendConn, clientConn)
+		done <- struct{}{}
+	}()
+
+	// Wait for either direction to finish, then close both
+	<-done
 }
 
 // StaticHandler serves static files
