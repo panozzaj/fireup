@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/panozzaj/fireup/internal/diff"
 )
 
 func TestCheckHelpFlag(t *testing.T) {
@@ -76,6 +78,74 @@ func TestRequireNonRoot(t *testing.T) {
 		if err != nil {
 			t.Errorf("unexpected error when not root: %v", err)
 		}
+	}
+}
+
+func TestIsAgent(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		want     bool
+	}{
+		{"set to 1", "1", true},
+		{"unset", "", false},
+		{"set to 0", "0", false},
+		{"set to true", "true", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				t.Setenv("CLAUDECODE", tt.envValue)
+			} else {
+				t.Setenv("CLAUDECODE", "")
+			}
+			if got := isAgent(); got != tt.want {
+				t.Errorf("isAgent() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfirmStep_AgentMode(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("FIREUP_YES", "")
+
+	if confirmStep("Do something?") {
+		t.Error("confirmStep should return false in agent mode")
+	}
+}
+
+func TestConfirmStep_FireupYesTakesPrecedence(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("FIREUP_YES", "1")
+
+	if !confirmStep("Do something?") {
+		t.Error("confirmStep should return true when FIREUP_YES=1, even in agent mode")
+	}
+}
+
+func TestConfirmWithPlan_AgentMode(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("FIREUP_YES", "")
+
+	plan := diff.NewPlan()
+	plan.CreateStatic("/tmp/fireup-test-nonexistent", "test")
+
+	if confirmWithPlan(plan, "Apply changes?") {
+		t.Error("confirmWithPlan should return false in agent mode")
+	}
+}
+
+func TestConfirmWithPlan_FireupYesTakesPrecedence(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("FIREUP_YES", "1")
+
+	plan := diff.NewPlan()
+	plan.CreateStatic("/tmp/fireup-test-nonexistent", "test")
+
+	if !confirmWithPlan(plan, "Apply changes?") {
+		t.Error("confirmWithPlan should return true when FIREUP_YES=1, even in agent mode")
 	}
 }
 
