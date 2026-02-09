@@ -61,3 +61,9 @@ func requireNonRoot(action string) error {
 func isRoot() bool {
 	return os.Geteuid() == 0
 }
+
+// isAgent returns true if running under an AI coding agent (e.g. Claude Code).
+// Interactive prompts should fail fast when this is true.
+func isAgent() bool {
+	return os.Getenv("CLAUDECODE") == "1"
+}

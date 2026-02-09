@@ -128,6 +128,10 @@ func checkInstallConflicts(tld string) error {
 			fmt.Printf("  - %s\n", w)
 		}
 		fmt.Println("\nThese may conflict with fireup. Consider removing them first.")
+		if isAgent() {
+			fmt.Fprintf(os.Stderr, "Error: interactive prompt not supported in agent mode.\nUse FIREUP_YES=1 to skip confirmations.\n")
+			return fmt.Errorf("installation cancelled (agent mode)")
+		}
 		fmt.Print("Continue anyway? [y/N]: ")
 
 		var response string

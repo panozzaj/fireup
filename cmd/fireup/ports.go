@@ -208,6 +208,10 @@ func confirmPortsInstall(tld, prompt string) bool {
 	if os.Getenv("FIREUP_YES") == "1" {
 		return true
 	}
+	if isAgent() {
+		fmt.Fprintf(os.Stderr, "Error: interactive prompt not supported in agent mode.\nUse FIREUP_YES=1 to skip confirmations.\n")
+		return false
+	}
 
 	plan := portsInstallPlan(tld)
 	summary := plan.Summary()

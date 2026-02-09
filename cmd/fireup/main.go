@@ -25,7 +25,7 @@ import (
 )
 
 func printLogo() {
-	if os.Getenv("CLAUDECODE") != "1" {
+	if !isAgent() {
 		fmt.Println(logo.CLI())
 	}
 }
@@ -35,6 +35,10 @@ func printLogo() {
 func confirmStep(prompt string) bool {
 	if os.Getenv("FIREUP_YES") == "1" {
 		return true
+	}
+	if isAgent() {
+		fmt.Fprintf(os.Stderr, "Error: interactive prompt not supported in agent mode.\nUse FIREUP_YES=1 to skip confirmations.\n")
+		return false
 	}
 	fmt.Printf("%s [y/N]: ", prompt)
 	var response string
@@ -49,6 +53,10 @@ func confirmStep(prompt string) bool {
 func confirmWithPlan(plan *diff.Plan, prompt string) bool {
 	if os.Getenv("FIREUP_YES") == "1" {
 		return true
+	}
+	if isAgent() {
+		fmt.Fprintf(os.Stderr, "Error: interactive prompt not supported in agent mode.\nUse FIREUP_YES=1 to skip confirmations.\n")
+		return false
 	}
 
 	summary := plan.Summary()
