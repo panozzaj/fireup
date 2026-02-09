@@ -455,6 +455,7 @@ DESCRIPTION:
 
 	fs.Parse(args)
 
+	requireNotAgent("setup")
 	runSetupWizard(configDir, tld)
 }
 
@@ -535,6 +536,7 @@ DESCRIPTION:
 
 	fs.Parse(args)
 
+	requireNotAgent("teardown")
 	runTeardownWizard(tld)
 }
 

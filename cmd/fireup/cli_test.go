@@ -81,6 +81,19 @@ func TestRequireNonRoot(t *testing.T) {
 	}
 }
 
+func TestRequireNotAgent_PassesWhenNotAgent(t *testing.T) {
+	t.Setenv("CLAUDECODE", "")
+	// Should not exit
+	requireNotAgent("setup")
+}
+
+func TestRequireNotAgent_PassesWithFireupYes(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("FIREUP_YES", "1")
+	// Should not exit even in agent mode when FIREUP_YES is set
+	requireNotAgent("setup")
+}
+
 func TestIsAgent(t *testing.T) {
 	tests := []struct {
 		name     string

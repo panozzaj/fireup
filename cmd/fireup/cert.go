@@ -101,6 +101,8 @@ DESCRIPTION:
 
 	fs.Parse(args)
 
+	requireNotAgent("cert install")
+
 	// Load saved config for TLD
 	globalCfg, _ := loadGlobalConfig(configDir)
 	if globalCfg != nil && tld == "test" {
@@ -126,6 +128,7 @@ Also removes the CA from the system trust store (requires sudo).`) {
 		os.Exit(0)
 	}
 
+	requireNotAgent("cert uninstall")
 	if err := runCertUninstall(); err != nil {
 		log.Fatalf("Certificate uninstall failed: %v", err)
 	}

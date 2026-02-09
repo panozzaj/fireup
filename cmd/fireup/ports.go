@@ -101,6 +101,7 @@ EXAMPLES:
 
 	fs.Parse(args)
 
+	requireNotAgent("ports install")
 	if err := runPortsInstall(configDir, tld); err != nil {
 		log.Fatalf("Port forwarding install failed: %v", err)
 	}
@@ -144,6 +145,7 @@ EXAMPLES:
 
 	fs.Parse(args)
 
+	requireNotAgent("ports uninstall")
 	if err := runPortsUninstall(tld); err != nil {
 		log.Fatalf("Port forwarding uninstall failed: %v", err)
 	}

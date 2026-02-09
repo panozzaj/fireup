@@ -67,3 +67,15 @@ func isRoot() bool {
 func isAgent() bool {
 	return os.Getenv("CLAUDECODE") == "1"
 }
+
+// requireNotAgent exits with a helpful message if running under an agent
+// without FIREUP_YES=1. Call at the top of interactive commands.
+func requireNotAgent(command string) {
+	if !isAgent() || os.Getenv("FIREUP_YES") == "1" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "Error: '%s' requires interactive input, which is not supported in agent mode.\n", command)
+	fmt.Fprintf(os.Stderr, "Use FIREUP_YES=1 to skip confirmations, e.g.:\n")
+	fmt.Fprintf(os.Stderr, "  FIREUP_YES=1 fireup %s\n", command)
+	os.Exit(1)
+}

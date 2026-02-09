@@ -69,6 +69,7 @@ Logs are written to ~/Library/Logs/fireup/`) {
 		os.Exit(0)
 	}
 
+	requireNotAgent("service install")
 	if err := runServiceInstall(); err != nil {
 		log.Fatalf("Service install failed: %v", err)
 	}
@@ -84,6 +85,7 @@ Stops fireup and removes the LaunchAgent.`) {
 		os.Exit(0)
 	}
 
+	requireNotAgent("service uninstall")
 	if err := runServiceUninstall(); err != nil {
 		log.Fatalf("Service uninstall failed: %v", err)
 	}
