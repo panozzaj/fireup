@@ -138,6 +138,8 @@ func main() {
 		cmdService(args)
 	case "cert":
 		cmdCert(args)
+	case "open":
+		cmdOpen(args)
 	case "docs":
 		cmdDocs(args)
 	case "logs":
@@ -166,6 +168,7 @@ APP CONTROL:
     stop <app>        Stop an app
     restart <app>     Restart an app
     logs [app]        View server or app logs (-f to follow)
+    open              Open the dashboard in a web browser
 
 SETUP:
     setup             Interactive setup wizard (ports + cert + service)
