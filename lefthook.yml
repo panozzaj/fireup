@@ -43,3 +43,8 @@ pre-commit:
         - name: js-tests
           glob: 'internal/**/*.test.js'
           run: node {staged_files}
+
+post-commit:
+    jobs:
+        - name: rebuild-fireup
+          run: ./scripts/restart.sh
