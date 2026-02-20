@@ -526,6 +526,21 @@ function slugify(name) {
     return name.toLowerCase().replace(/ /g, '-')
 }
 
+// Format memory for display (e.g. "1.2 GB", "342 MB", "1.2 / 4.0 GB")
+function formatMemory(mb, limitMb) {
+    var format = function (m) {
+        return m >= 1024 ? (m / 1024).toFixed(1) + ' GB' : m + ' MB'
+    }
+    if (limitMb) {
+        // Show both in the same unit as the limit
+        if (limitMb >= 1024) {
+            return (mb / 1024).toFixed(1) + ' / ' + (limitMb / 1024).toFixed(1) + ' GB'
+        }
+        return mb + ' / ' + limitMb + ' MB'
+    }
+    return format(mb)
+}
+
 // Fix URL to use current protocol (http/https)
 function fixProtocol(url) {
     if (!url) return url
@@ -812,6 +827,13 @@ function renderApp(app) {
                         '<span class="app-uptime">' +
                         (svc.uptime || '') +
                         '</span>' +
+                        '<span class="app-memory' +
+                        (svc.memory_mb && svc.memory_limit_mb && svc.memory_mb / svc.memory_limit_mb > 0.8
+                            ? ' app-memory-warning'
+                            : '') +
+                        '">' +
+                        (svc.memory_mb ? formatMemory(svc.memory_mb, svc.memory_limit_mb) : '') +
+                        '</span>' +
                         '<a class="app-url" href="' +
                         fixProtocol(svc.url) +
                         '" target="_blank" rel="noopener">' +
@@ -882,6 +904,13 @@ function renderApp(app) {
         '</span>' +
         '<span class="app-uptime">' +
         (app.uptime || '') +
+        '</span>' +
+        '<span class="app-memory' +
+        (app.memory_mb && app.memory_limit_mb && app.memory_mb / app.memory_limit_mb > 0.8
+            ? ' app-memory-warning'
+            : '') +
+        '">' +
+        (app.memory_mb ? formatMemory(app.memory_mb, app.memory_limit_mb) : '') +
         '</span>' +
         '<div class="app-settings-dropdown">' +
         '<button class="app-settings-btn" onclick="event.stopPropagation(); toggleAppSettings(\'' +

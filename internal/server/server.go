@@ -39,6 +39,26 @@ func (s *Server) collectProcessNames() map[string]bool {
 	return names
 }
 
+// getMemoryLimit returns the configured memory limit (in bytes) for a process name.
+// Process names for multi-service apps are formatted as "service-appname".
+func (s *Server) getMemoryLimit(procName string) int64 {
+	for _, app := range s.apps.All() {
+		switch app.Type {
+		case config.AppTypeCommand:
+			if app.Name == procName {
+				return app.MemoryLimit
+			}
+		case config.AppTypeYAML:
+			for _, svc := range app.Services {
+				if fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name) == procName {
+					return svc.MemoryLimit
+				}
+			}
+		}
+	}
+	return 0
+}
+
 // Server is the main fireup server
 type Server struct {
 	cfg           *config.Config
@@ -178,6 +198,15 @@ func (s *Server) Start() error {
 	if s.configWatcher != nil {
 		s.configWatcher.Start()
 	}
+
+	// Start memory watchdog
+	s.procs.MonitorMemory(
+		func(procName string) int64 { return s.getMemoryLimit(procName) },
+		func(procName string) {
+			s.logRequest("Memory watchdog restarted %s", procName)
+			s.broadcastStatus()
+		},
+	)
 
 	// Periodic status broadcast to catch state changes (process ready/failed)
 	go func() {

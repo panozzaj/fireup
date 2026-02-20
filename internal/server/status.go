@@ -6,36 +6,41 @@ import (
 	"net/http"
 
 	"github.com/panozzaj/fireup/internal/config"
+	"github.com/panozzaj/fireup/internal/process"
 )
 
 // serviceStatus represents the status of a single service
 type serviceStatus struct {
-	Name     string `json:"name"`
-	Running  bool   `json:"running"`
-	Starting bool   `json:"starting,omitempty"`
-	Failed   bool   `json:"failed,omitempty"`
-	Error    string `json:"error,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Uptime   string `json:"uptime,omitempty"`
-	Default  bool   `json:"default,omitempty"`
-	URL      string `json:"url,omitempty"`
+	Name          string `json:"name"`
+	Running       bool   `json:"running"`
+	Starting      bool   `json:"starting,omitempty"`
+	Failed        bool   `json:"failed,omitempty"`
+	Error         string `json:"error,omitempty"`
+	Port          int    `json:"port,omitempty"`
+	Uptime        string `json:"uptime,omitempty"`
+	Default       bool   `json:"default,omitempty"`
+	URL           string `json:"url,omitempty"`
+	MemoryMB      int    `json:"memory_mb,omitempty"`
+	MemoryLimitMB int    `json:"memory_limit_mb,omitempty"`
 }
 
 // appStatus represents the status of an app
 type appStatus struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	Aliases     []string        `json:"aliases,omitempty"`
-	Type        string          `json:"type"`
-	URL         string          `json:"url"`
-	Running     bool            `json:"running,omitempty"`
-	Starting    bool            `json:"starting,omitempty"`
-	Failed      bool            `json:"failed,omitempty"`
-	Error       string          `json:"error,omitempty"`
-	Port        int             `json:"port,omitempty"`
-	Uptime      string          `json:"uptime,omitempty"`
-	Services    []serviceStatus `json:"services,omitempty"`
-	Warnings    []string        `json:"warnings,omitempty"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description,omitempty"`
+	Aliases       []string        `json:"aliases,omitempty"`
+	Type          string          `json:"type"`
+	URL           string          `json:"url"`
+	Running       bool            `json:"running,omitempty"`
+	Starting      bool            `json:"starting,omitempty"`
+	Failed        bool            `json:"failed,omitempty"`
+	Error         string          `json:"error,omitempty"`
+	Port          int             `json:"port,omitempty"`
+	Uptime        string          `json:"uptime,omitempty"`
+	Services      []serviceStatus `json:"services,omitempty"`
+	Warnings      []string        `json:"warnings,omitempty"`
+	MemoryMB      int             `json:"memory_mb,omitempty"`
+	MemoryLimitMB int             `json:"memory_limit_mb,omitempty"`
 }
 
 // reservedTailscalePaths are path prefixes reserved for fireup internal use.
@@ -50,6 +55,23 @@ func isReservedTailscalePath(name string) bool {
 		}
 	}
 	return false
+}
+
+const oneGBinBytes = 1024 * 1024 * 1024
+
+// getMemoryMB returns the process memory in MB if it should be displayed:
+// either because a memory limit is configured, or RSS >= 1GB.
+// Returns 0 (omitted from JSON) if memory shouldn't be shown.
+func getMemoryMB(proc *process.Process, memoryLimit int64) int {
+	rss := proc.MemoryRSS()
+	if rss <= 0 {
+		return 0
+	}
+	mb := int(rss / (1024 * 1024))
+	if memoryLimit > 0 || rss >= oneGBinBytes {
+		return mb
+	}
+	return 0
 }
 
 // getStatus returns the current status of all apps as JSON
@@ -95,11 +117,15 @@ func (s *Server) getStatus() []byte {
 
 		case config.AppTypeCommand:
 			as.Type = "command"
+			if app.MemoryLimit > 0 {
+				as.MemoryLimitMB = int(app.MemoryLimit / (1024 * 1024))
+			}
 			if proc, found := s.procs.Get(app.Name); found {
 				if proc.IsRunning() {
 					as.Running = true
 					as.Port = proc.Port
 					as.Uptime = proc.Uptime().Round(1e9).String()
+					as.MemoryMB = getMemoryMB(proc, app.MemoryLimit)
 				} else if proc.IsStarting() {
 					as.Starting = true
 					as.Port = proc.Port
@@ -118,6 +144,9 @@ func (s *Server) getStatus() []byte {
 			// Keep base URL (app.test) - default service routes there automatically
 			for _, svc := range app.Services {
 				ss := serviceStatus{Name: svc.Name, Default: svc.Default}
+				if svc.MemoryLimit > 0 {
+					ss.MemoryLimitMB = int(svc.MemoryLimit / (1024 * 1024))
+				}
 				procName := fmt.Sprintf("%s-%s", slugify(svc.Name), app.Name)
 				// Set service URL
 				if app.Name == "fireup-tests" {
@@ -132,6 +161,7 @@ func (s *Server) getStatus() []byte {
 						ss.Running = true
 						ss.Port = proc.Port
 						ss.Uptime = proc.Uptime().Round(1e9).String()
+						ss.MemoryMB = getMemoryMB(proc, svc.MemoryLimit)
 					} else if proc.IsStarting() {
 						ss.Starting = true
 						ss.Port = proc.Port

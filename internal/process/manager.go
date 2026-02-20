@@ -123,6 +123,9 @@ type Manager struct {
 	portStart     int
 	portEnd       int
 	nextPort      int
+
+	memoryRestarts   map[string]time.Time // tracks last memory-triggered restart per process
+	memoryRestartsMu sync.Mutex
 }
 
 // NewManager creates a new process manager
@@ -132,11 +135,12 @@ func NewManager() *Manager {
 	// Start from a random port to avoid conflicts with orphaned processes
 	nextPort := portStart + int(time.Now().UnixNano()%int64(portEnd-portStart))
 	return &Manager{
-		processes:     make(map[string]*Process),
-		reservedPorts: make(map[int]bool),
-		portStart:     portStart,
-		portEnd:       portEnd,
-		nextPort:      nextPort,
+		processes:      make(map[string]*Process),
+		reservedPorts:  make(map[int]bool),
+		portStart:      portStart,
+		portEnd:        portEnd,
+		nextPort:       nextPort,
+		memoryRestarts: make(map[string]time.Time),
 	}
 }
 
@@ -813,4 +817,94 @@ func (p *Process) ExitError() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.exitError
+}
+
+// Pid returns the OS process ID, or 0 if not running.
+func (p *Process) Pid() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cmd != nil && p.cmd.Process != nil {
+		return p.cmd.Process.Pid
+	}
+	return 0
+}
+
+// MemoryRSS returns the total RSS in bytes for this process and its children.
+func (p *Process) MemoryRSS() int64 {
+	pid := p.Pid()
+	if pid == 0 {
+		return 0
+	}
+	rss, _ := GetProcessTreeRSS(pid)
+	return rss
+}
+
+// MonitorMemory starts a background goroutine that checks process memory usage
+// every 30 seconds. When a process exceeds its limit, it is restarted.
+//
+// getLimit returns the memory limit in bytes for a process name (0 = no limit).
+// onRestart is called after a memory-triggered restart (e.g. to broadcast status).
+func (m *Manager) MonitorMemory(getLimit func(name string) int64, onRestart func(name string)) {
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		for range ticker.C {
+			m.checkMemoryLimits(getLimit, onRestart)
+		}
+	}()
+}
+
+func (m *Manager) checkMemoryLimits(getLimit func(name string) int64, onRestart func(name string)) {
+	m.mu.RLock()
+	var toCheck []struct {
+		name string
+		proc *Process
+	}
+	for name, proc := range m.processes {
+		toCheck = append(toCheck, struct {
+			name string
+			proc *Process
+		}{name, proc})
+	}
+	m.mu.RUnlock()
+
+	for _, entry := range toCheck {
+		if !entry.proc.IsRunning() {
+			continue
+		}
+
+		limit := getLimit(entry.name)
+		if limit <= 0 {
+			continue
+		}
+
+		// Grace period: skip processes started less than 60s ago
+		if entry.proc.Uptime() < 60*time.Second {
+			continue
+		}
+
+		// Prevent restart loops: skip if we restarted this process within the last 60s
+		m.memoryRestartsMu.Lock()
+		if lastRestart, ok := m.memoryRestarts[entry.name]; ok && time.Since(lastRestart) < 60*time.Second {
+			m.memoryRestartsMu.Unlock()
+			continue
+		}
+		m.memoryRestartsMu.Unlock()
+
+		rss := entry.proc.MemoryRSS()
+		if rss <= 0 || rss < limit {
+			continue
+		}
+
+		fmt.Printf("[fireup] Memory watchdog: %s using %s (limit %s), restarting...\n",
+			entry.name, FormatBytes(rss), FormatBytes(limit))
+
+		m.memoryRestartsMu.Lock()
+		m.memoryRestarts[entry.name] = time.Now()
+		m.memoryRestartsMu.Unlock()
+
+		m.RestartAsync(entry.name)
+		if onRestart != nil {
+			onRestart(entry.name)
+		}
+	}
 }

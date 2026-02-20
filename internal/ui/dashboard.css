@@ -229,6 +229,14 @@ h1 {
     color: var(--text-muted);
     min-width: 40px;
 }
+.app-memory {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.app-memory-warning {
+    color: var(--warning);
+    font-weight: 600;
+}
 /* App settings dropdown - only visible on hover */
 .app-settings-dropdown {
     position: relative;

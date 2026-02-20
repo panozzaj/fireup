@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,18 +43,20 @@ type App struct {
 	FilePath    string    // For static file serving
 	Services    []Service // For multi-service YAML configs
 	Env         map[string]string
-	Hidden      bool // If true, hide from dashboard (still accessible via URL)
+	Hidden      bool  // If true, hide from dashboard (still accessible via URL)
+	MemoryLimit int64 // Memory limit in bytes (0 = no limit); restarts process when exceeded
 }
 
 // Service represents a service within a multi-service app
 type Service struct {
-	Name      string
-	Dir       string
-	Command   string
-	Port      int // Assigned dynamically
-	Env       map[string]string
-	Default   bool     // If true, this service handles requests to the base app URL
-	DependsOn []string // Names of services that must start first
+	Name        string
+	Dir         string
+	Command     string
+	Port        int // Assigned dynamically
+	Env         map[string]string
+	Default     bool     // If true, this service handles requests to the base app URL
+	DependsOn   []string // Names of services that must start first
+	MemoryLimit int64    // Memory limit in bytes (0 = no limit); restarts service when exceeded
 }
 
 // AppType indicates how to handle the app
@@ -177,16 +180,18 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		Aliases     []string          `yaml:"aliases"`
 		Alias       string            `yaml:"alias"` // Single alias shorthand
 		Root        string            `yaml:"root"`
-		Static      bool              `yaml:"static"` // Serve static files from root
-		Command     string            `yaml:"cmd"`    // For single-service shorthand
-		Env         map[string]string `yaml:"env"`    // For single-service shorthand
-		Hidden      bool              `yaml:"hidden"` // Hide from dashboard
+		Static      bool              `yaml:"static"`       // Serve static files from root
+		Command     string            `yaml:"cmd"`          // For single-service shorthand
+		Env         map[string]string `yaml:"env"`          // For single-service shorthand
+		Hidden      bool              `yaml:"hidden"`       // Hide from dashboard
+		MemoryLimit string            `yaml:"memory_limit"` // e.g. "4GB", "512MB"
 		Services    map[string]struct {
-			Dir       string            `yaml:"dir"`
-			Command   string            `yaml:"cmd"`
-			Env       map[string]string `yaml:"env"`
-			Default   bool              `yaml:"default"`
-			DependsOn []string          `yaml:"depends_on"`
+			Dir         string            `yaml:"dir"`
+			Command     string            `yaml:"cmd"`
+			Env         map[string]string `yaml:"env"`
+			Default     bool              `yaml:"default"`
+			DependsOn   []string          `yaml:"depends_on"`
+			MemoryLimit string            `yaml:"memory_limit"`
 		} `yaml:"services"`
 	}
 
@@ -232,6 +237,12 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 		}, nil
 	}
 
+	// Parse top-level memory limit
+	appMemoryLimit, err := parseMemoryLimit(yamlCfg.MemoryLimit)
+	if err != nil {
+		return nil, fmt.Errorf("parsing memory_limit: %w", err)
+	}
+
 	// Single-service shorthand: cmd at top level
 	if yamlCfg.Command != "" {
 		return &App{
@@ -243,6 +254,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			Dir:         root,
 			Env:         yamlCfg.Env,
 			Hidden:      yamlCfg.Hidden,
+			MemoryLimit: appMemoryLimit,
 		}, nil
 	}
 
@@ -253,6 +265,14 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			if svcCfg.Dir != "" {
 				svcDir = filepath.Join(root, svcCfg.Dir)
 			}
+			// Service-level memory_limit overrides app-level
+			memLimit := appMemoryLimit
+			if svcCfg.MemoryLimit != "" {
+				memLimit, err = parseMemoryLimit(svcCfg.MemoryLimit)
+				if err != nil {
+					return nil, fmt.Errorf("parsing service memory_limit: %w", err)
+				}
+			}
 			return &App{
 				Name:        appName,
 				Description: yamlCfg.Description,
@@ -262,6 +282,7 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 				Dir:         svcDir,
 				Env:         svcCfg.Env,
 				Hidden:      yamlCfg.Hidden,
+				MemoryLimit: memLimit,
 			}, nil
 		}
 	}
@@ -280,13 +301,23 @@ func (s *AppStore) loadYAMLApp(name, path string) (*App, error) {
 			svcDir = filepath.Join(root, svcCfg.Dir)
 		}
 
+		// Service-level memory_limit overrides app-level
+		svcMemLimit := appMemoryLimit
+		if svcCfg.MemoryLimit != "" {
+			svcMemLimit, err = parseMemoryLimit(svcCfg.MemoryLimit)
+			if err != nil {
+				return nil, fmt.Errorf("parsing memory_limit for service %s: %w", svcName, err)
+			}
+		}
+
 		services = append(services, Service{
-			Name:      svcName,
-			Dir:       svcDir,
-			Command:   svcCfg.Command,
-			Env:       svcCfg.Env,
-			Default:   svcCfg.Default,
-			DependsOn: svcCfg.DependsOn,
+			Name:        svcName,
+			Dir:         svcDir,
+			Command:     svcCfg.Command,
+			Env:         svcCfg.Env,
+			Default:     svcCfg.Default,
+			DependsOn:   svcCfg.DependsOn,
+			MemoryLimit: svcMemLimit,
 		})
 	}
 
@@ -439,6 +470,39 @@ func (s *AppStore) Reload() error {
 	s.mu.Unlock()
 
 	return s.Load()
+}
+
+// parseMemoryLimit converts a human-friendly memory string to bytes.
+// Accepts formats like "4GB", "4gb", "4g", "512MB", "512m", "1024KB", "1024k".
+// Returns 0 for empty string (no limit).
+var memoryLimitRe = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)\s*(gb|g|mb|m|kb|k)$`)
+
+func parseMemoryLimit(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+
+	matches := memoryLimitRe.FindStringSubmatch(s)
+	if matches == nil {
+		return 0, fmt.Errorf("invalid memory limit %q (use e.g. 4GB, 512MB, 1024KB)", s)
+	}
+
+	value, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid number in memory limit %q: %w", s, err)
+	}
+
+	unit := strings.ToUpper(matches[2])
+	switch unit {
+	case "GB", "G":
+		return int64(value * 1024 * 1024 * 1024), nil
+	case "MB", "M":
+		return int64(value * 1024 * 1024), nil
+	case "KB", "K":
+		return int64(value * 1024), nil
+	}
+	return 0, fmt.Errorf("unknown unit in memory limit %q", s)
 }
 
 // topologicalSort orders services so dependencies come before dependents
