@@ -242,9 +242,38 @@ TAILSCALE SERVE (REMOTE ACCESS)
         tailscale serve reset    # Remove all serve configurations
         tailscale serve status   # View current configuration
 
+GLOBAL SETTINGS
+    Global settings are stored in ~/.config/fireup/config.json
+
+    Example:
+        {
+          "tld": "test",
+          "claude_command": "claude",
+          "ollama": {
+            "enabled": true,
+            "url": "http://localhost:11434",
+            "model": "llama3.2"
+          }
+        }
+
+    tld               Top-level domain for app URLs (default: "test")
+                      Apps are accessible at http://<app>.<tld>
+
+    claude_command    Command to run Claude Code for the "Fix with Claude
+                      Code" button on error pages (default: "claude").
+                      Set to the path or name of your Claude Code binary.
+                      Leave empty or omit to disable the button.
+
+    ollama            Local LLM for error log analysis on the dashboard.
+        enabled       Enable Ollama integration (default: false)
+        url           Ollama API URL (e.g., "http://localhost:11434")
+        model         Model name (e.g., "llama3.2")
+
+    Changes to config.json are picked up without restarting fireup.
+
 FILES
     ~/.config/fireup/           App configuration directory
-    ~/.config/fireup/config.json   Global settings (TLD, etc.)
+    ~/.config/fireup/config.json   Global settings (see GLOBAL SETTINGS)
     ~/.config/fireup/certs/     HTTPS certificates
     ~/Library/LaunchAgents/com.fireup.plist   Background service
     ~/Library/Logs/fireup/      Service logs
