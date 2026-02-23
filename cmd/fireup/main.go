@@ -975,10 +975,32 @@ func runSetupWizard(configDir, tld string) {
 				fmt.Println("Skipped. You can update later with: fireup ports install")
 			}
 		} else {
-			fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
-			fmt.Println("  Found: /etc/pf.anchors/fireup")
-			fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
-			fmt.Printf("  Found: /etc/resolver/%s\n", tld)
+			// Files are installed and config matches — but are the rules actually active?
+			mark, detail := checkPortsStatus()
+			if mark == "✓" {
+				fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
+				fmt.Println("  Found: /etc/pf.anchors/fireup")
+				fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
+				fmt.Printf("  Found: /etc/resolver/%s\n", tld)
+			} else {
+				fmt.Printf("%s⚠ Installed but not active%s (%s)\n", colorYellow, colorReset, detail)
+				fmt.Println("  Files are in place but port forwarding rules aren't loaded.")
+				fmt.Println("  This can happen after a macOS update resets /etc/pf.conf.")
+				fmt.Println()
+				fmt.Println("Requires: sudo (will prompt for password)")
+				fmt.Println()
+				if confirmStep("Repair port forwarding?") {
+					os.Setenv("FIREUP_YES", "1")
+					if err := runPortsInstall(configDir, tld); err != nil {
+						fmt.Printf("\n%s⚠ Repair failed: %v%s\n", colorYellow, err, colorReset)
+					} else {
+						fmt.Printf("%s✓ Port forwarding repaired%s\n", colorGreen, colorReset)
+					}
+					os.Unsetenv("FIREUP_YES")
+				} else {
+					fmt.Println("Skipped. You can repair with: fireup ports install")
+				}
+			}
 		}
 	} else {
 		fmt.Println("This step lets you access apps at http://myapp.test instead of")
