@@ -142,6 +142,8 @@ func main() {
 		cmdOpen(args)
 	case "docs":
 		cmdDocs(args)
+	case "examples":
+		cmdExamples(args)
 	case "logs":
 		cmdLogs(args)
 	default:
@@ -183,6 +185,7 @@ ADVANCED:
 
 HELP:
     docs              Full documentation (config, troubleshooting)
+    examples          Framework config examples (vite, rails, etc.)
     <command> --help  Command-specific options
 
 QUICK START:
