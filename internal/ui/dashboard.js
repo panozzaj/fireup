@@ -507,6 +507,15 @@
 var currentApps = []
 var expandedLogs = null
 var eventSource = null
+var logsMouseDownEl = null
+
+document.addEventListener('mousedown', function (e) {
+    var el = e.target.closest('.logs-content')
+    logsMouseDownEl = el || null
+})
+document.addEventListener('mouseup', function () {
+    logsMouseDownEl = null
+})
 var claudeEnabled = false
 
 // Check if Claude Code integration is configured
@@ -1027,8 +1036,10 @@ function toggleLogs(name) {
     }
 }
 
-// Check if user has selected text within an element
+// Check if user has selected text within an element, or is actively pressing
+// the mouse button (mousedown but not yet dragged — selection still collapsed)
 function hasSelectionIn(el) {
+    if (logsMouseDownEl && el.contains(logsMouseDownEl)) return true
     var sel = window.getSelection()
     if (!sel || sel.isCollapsed || !sel.rangeCount) return false
     var range = sel.getRangeAt(0)
