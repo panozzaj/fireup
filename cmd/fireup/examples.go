@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -38,11 +39,16 @@ func listExamples() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Available framework examples:")
-	fmt.Println()
+	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		fmt.Printf("  fireup examples %s\n", name)
+		names = append(names, strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())))
+	}
+	sort.Strings(names)
+
+	fmt.Println("Usage: fireup examples <framework>")
+	fmt.Println()
+	for _, name := range names {
+		fmt.Printf("  %s\n", name)
 	}
 }
 
