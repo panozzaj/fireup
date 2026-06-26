@@ -58,14 +58,8 @@ func NewChecker() *Checker {
 	return &Checker{FS: OSFileSystem{}}
 }
 
-// IsPortForwardingInstalled checks if port forwarding appears to be set up.
-func (c *Checker) IsPortForwardingInstalled(tld string) bool {
-	if _, err := c.FS.Stat("/etc/pf.anchors/fireup"); err != nil {
-		return false
-	}
-	if _, err := c.FS.Stat("/Library/LaunchDaemons/dev.fireup.pfctl.plist"); err != nil {
-		return false
-	}
+// IsDNSInstalled checks if the DNS resolver is set up for the TLD.
+func (c *Checker) IsDNSInstalled(tld string) bool {
 	resolverPath := "/etc/resolver/" + tld
 	if _, err := c.FS.Stat(resolverPath); err != nil {
 		return false

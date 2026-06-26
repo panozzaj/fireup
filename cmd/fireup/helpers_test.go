@@ -7,13 +7,9 @@ import (
 	"testing"
 )
 
-func TestIsPfPlistOutdated(t *testing.T) {
-	// When plist doesn't exist, should return false
-	if isPfPlistOutdated() {
-		// This test runs in a development environment where the plist may or may not exist
-		// If it exists and differs from expected, that's fine
-		t.Log("plist exists and differs from expected, or doesn't exist")
-	}
+func TestIsDNSInstalled(t *testing.T) {
+	// Just test that it doesn't panic
+	_ = isDNSInstalled("test")
 }
 
 func TestIsCertInstalled(t *testing.T) {
@@ -41,11 +37,6 @@ func TestIsCertInstalled(t *testing.T) {
 	if !isCertInstalled(tmpDir) {
 		t.Error("expected isCertInstalled to return true with cert files")
 	}
-}
-
-func TestIsPortForwardingInstalled(t *testing.T) {
-	// Just test that it doesn't panic
-	_ = isPortForwardingInstalled("test")
 }
 
 func TestGetProcessOnPort(t *testing.T) {
@@ -93,24 +84,6 @@ func TestGetCertsDir(t *testing.T) {
 	}
 }
 
-func TestGetPfAnchorContent(t *testing.T) {
-	content := getPfAnchorContent()
-
-	// Should contain the expected rules
-	if !strings.Contains(content, "port 80") {
-		t.Error("expected content to contain port 80 rule")
-	}
-	if !strings.Contains(content, "port 443") {
-		t.Error("expected content to contain port 443 rule")
-	}
-	if !strings.Contains(content, "9280") {
-		t.Error("expected content to contain port 9280")
-	}
-	if !strings.Contains(content, "9443") {
-		t.Error("expected content to contain port 9443")
-	}
-}
-
 func TestGetResolverContent(t *testing.T) {
 	content := getResolverContent()
 
@@ -120,5 +93,17 @@ func TestGetResolverContent(t *testing.T) {
 	}
 	if !strings.Contains(content, "port 9053") {
 		t.Error("expected content to contain port 9053")
+	}
+}
+
+func TestDefaultPorts(t *testing.T) {
+	if DefaultHTTPPort != 80 {
+		t.Errorf("expected DefaultHTTPPort to be 80, got %d", DefaultHTTPPort)
+	}
+	if DefaultHTTPSPort != 443 {
+		t.Errorf("expected DefaultHTTPSPort to be 443, got %d", DefaultHTTPSPort)
+	}
+	if DefaultDNSPort != 9053 {
+		t.Errorf("expected DefaultDNSPort to be 9053, got %d", DefaultDNSPort)
 	}
 }

@@ -32,7 +32,7 @@ The `service install` command captures your current `PATH`, `HOME`, `USER`, etc.
 ### Setup/teardown wizards
 
 ```bash
-# Interactive setup (port forwarding, CA cert, background service)
+# Interactive setup (DNS resolution, CA cert, background service)
 fireup setup
 
 # Interactive teardown (reverse of setup)

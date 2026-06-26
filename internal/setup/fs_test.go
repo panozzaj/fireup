@@ -85,71 +85,35 @@ func (m *MockFileSystem) AddFile(path string, content []byte) {
 	m.Files[path] = content
 }
 
-func TestIsPortForwardingInstalled(t *testing.T) {
-	t.Run("returns false when no files exist", func(t *testing.T) {
+func TestIsDNSInstalled(t *testing.T) {
+	t.Run("returns false when resolver does not exist", func(t *testing.T) {
 		fs := NewMockFileSystem()
 		checker := &Checker{FS: fs}
 
-		if checker.IsPortForwardingInstalled("test") {
-			t.Error("expected false when no files exist")
+		if checker.IsDNSInstalled("test") {
+			t.Error("expected false when resolver does not exist")
 		}
 	})
 
-	t.Run("returns false when only anchor exists", func(t *testing.T) {
+	t.Run("returns true when resolver exists", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
+		fs.AddFile("/etc/resolver/test", []byte("nameserver 127.0.0.1\nport 9053\n"))
 		checker := &Checker{FS: fs}
 
-		if checker.IsPortForwardingInstalled("test") {
-			t.Error("expected false when only anchor exists")
-		}
-	})
-
-	t.Run("returns false when LaunchDaemon missing", func(t *testing.T) {
-		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
-		fs.AddFile("/etc/resolver/test", []byte("nameserver"))
-		checker := &Checker{FS: fs}
-
-		if checker.IsPortForwardingInstalled("test") {
-			t.Error("expected false when LaunchDaemon missing")
-		}
-	})
-
-	t.Run("returns false when resolver missing", func(t *testing.T) {
-		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
-		checker := &Checker{FS: fs}
-
-		if checker.IsPortForwardingInstalled("test") {
-			t.Error("expected false when resolver missing")
-		}
-	})
-
-	t.Run("returns true when all files exist", func(t *testing.T) {
-		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
-		fs.AddFile("/etc/resolver/test", []byte("nameserver"))
-		checker := &Checker{FS: fs}
-
-		if !checker.IsPortForwardingInstalled("test") {
-			t.Error("expected true when all files exist")
+		if !checker.IsDNSInstalled("test") {
+			t.Error("expected true when resolver exists")
 		}
 	})
 
 	t.Run("uses correct TLD for resolver path", func(t *testing.T) {
 		fs := NewMockFileSystem()
-		fs.AddFile("/etc/pf.anchors/fireup", []byte("rules"))
-		fs.AddFile("/Library/LaunchDaemons/dev.fireup.pfctl.plist", []byte("plist"))
-		fs.AddFile("/etc/resolver/dev", []byte("nameserver"))
+		fs.AddFile("/etc/resolver/dev", []byte("nameserver 127.0.0.1\nport 9053\n"))
 		checker := &Checker{FS: fs}
 
-		if !checker.IsPortForwardingInstalled("dev") {
+		if !checker.IsDNSInstalled("dev") {
 			t.Error("expected true with dev TLD")
 		}
-		if checker.IsPortForwardingInstalled("test") {
+		if checker.IsDNSInstalled("test") {
 			t.Error("expected false with test TLD when dev resolver exists")
 		}
 	})

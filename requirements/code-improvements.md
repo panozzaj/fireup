@@ -62,8 +62,8 @@ Added tests for:
 - `isServiceInstalled()` - validates installed/running state consistency
 - `getUserLaunchAgentPath()` - validates path construction
 - `getCertsDir()` - validates path construction
-- `getPfAnchorContent()` - validates pf rules content
 - `getResolverContent()` - validates resolver content
+- `DefaultPorts` - validates default port constants
 
 Still no tests for (require root/system changes):
 

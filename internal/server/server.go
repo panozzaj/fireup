@@ -229,15 +229,15 @@ func (s *Server) Start() error {
 		if err != nil {
 			fmt.Printf("Warning: failed to load CA: %v\n", err)
 		} else {
-			go s.startHTTPS(mux, certManager, "127.0.0.1")
-			go s.startHTTPS(mux, certManager, "[::1]")
+			go s.startHTTPS(mux, certManager)
 		}
 	}
 
-	// Start HTTP on IPv6 as well
-	go s.startHTTPv6(mux)
-
-	addr := fmt.Sprintf("127.0.0.1:%d", s.cfg.HTTPPort)
+	// Bind on 0.0.0.0 — on macOS Mojave+ this works without root for
+	// any port, including 80/443. This is how Caddy handles it.
+	// IPv6 connections to [::1] also reach this socket via IPv4-mapped
+	// addresses on most systems; a separate [::] listener is not needed.
+	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.HTTPPort)
 	s.httpSrv = &http.Server{
 		Addr:    addr,
 		Handler: mux,
@@ -246,21 +246,9 @@ func (s *Server) Start() error {
 	return s.httpSrv.ListenAndServe()
 }
 
-// startHTTPv6 starts an HTTP server on IPv6 localhost
-func (s *Server) startHTTPv6(handler http.Handler) {
-	addr := fmt.Sprintf("[::1]:%d", s.cfg.HTTPPort)
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: handler,
-	}
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		// IPv6 might not be available, that's OK
-	}
-}
-
 // startHTTPS starts the HTTPS server with dynamic certificate generation
-func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager, host string) {
-	addr := fmt.Sprintf("%s:%d", host, s.cfg.HTTPSPort)
+func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager) {
+	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.HTTPSPort)
 
 	srv := &http.Server{
 		Addr:      addr,
@@ -268,17 +256,11 @@ func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager, ho
 		TLSConfig: certManager.TLSConfig(),
 	}
 
-	// Only store the IPv4 server for shutdown and logging
-	if host == "127.0.0.1" {
-		s.httpsSrv = srv
-		fmt.Printf("HTTPS listening on https://%s:%d (dynamic certs)\n", host, s.cfg.HTTPSPort)
-	}
+	s.httpsSrv = srv
+	fmt.Printf("HTTPS listening on port %d (dynamic certs)\n", s.cfg.HTTPSPort)
 
 	if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-		// IPv6 might not be available, that's OK
-		if host != "[::1]" {
-			fmt.Printf("HTTPS server error: %v\n", err)
-		}
+		fmt.Printf("HTTPS server error: %v\n", err)
 	}
 }
 

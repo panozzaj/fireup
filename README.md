@@ -159,20 +159,9 @@ Run `fireup <command> --help` for command-specific options.
 
 ### Docker Desktop
 
-> [!CAUTION]
-> Docker Desktop on macOS is not currently compatible with fireup's port forwarding.
-
-Both Docker Desktop and fireup use macOS's `pf` (packet filter) for port redirection. When Docker starts or restarts, it clears fireup's pf rules, breaking access to `*.test` domains.
-
-**Workaround:** After starting Docker Desktop, re-run:
-
-```bash
-fireup ports install
-```
-
-**Alternative:** Access apps directly via `localhost:9280` instead of `*.test` domains.
-
-Pull requests to improve Docker compatibility are welcome.
+fireup binds directly to ports 80 and 443, so it coexists with Docker Desktop
+without conflicts. If a Docker container also needs port 80 or 443, you'll get
+a clear `address already in use` error — stop one to use the other.
 
 ## Claude Code Integration
 

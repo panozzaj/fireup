@@ -18,7 +18,7 @@ type Config struct {
 	Dir           string
 	HTTPPort      int // Port to listen on
 	HTTPSPort     int
-	URLPort       int // Port to use in generated URLs (for pf forwarding)
+	URLPort       int // Port to use in generated URLs (same as HTTPPort)
 	TLD           string
 	Ollama        *OllamaConfig
 	ClaudeCommand string // Command to run Claude Code (default: "claude")

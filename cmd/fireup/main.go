@@ -177,7 +177,7 @@ SETUP:
 
 ADVANCED:
     serve             Start the fireup server (usually runs as service)
-    ports             Manage port forwarding (install/uninstall)
+    ports             Manage DNS resolution (install/uninstall)
     cert              Manage HTTPS certificates (install/uninstall)
     service           Manage background service (install/uninstall)
 
@@ -198,19 +198,17 @@ func cmdServe(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 
 	var (
-		configDir     string
-		httpPort      int
-		httpsPort     int
-		advertisePort int
-		dnsPort       int
-		tld           string
+		configDir string
+		httpPort  int
+		httpsPort int
+		dnsPort   int
+		tld       string
 	)
 
 	fs.StringVar(&configDir, "dir", getDefaultConfigDir(), "Configuration directory")
-	fs.IntVar(&httpPort, "http-port", 9280, "HTTP port to listen on")
-	fs.IntVar(&httpsPort, "https-port", 9443, "HTTPS port to listen on")
-	fs.IntVar(&advertisePort, "advertise-port", 80, "Port to use in URLs (0 = same as http-port)")
-	fs.IntVar(&dnsPort, "dns-port", 9053, "DNS server port")
+	fs.IntVar(&httpPort, "http-port", DefaultHTTPPort, "HTTP port to listen on")
+	fs.IntVar(&httpsPort, "https-port", DefaultHTTPSPort, "HTTPS port to listen on")
+	fs.IntVar(&dnsPort, "dns-port", DefaultDNSPort, "DNS server port")
 	fs.StringVar(&tld, "tld", "", "Top-level domain (default: from config or 'localhost')")
 
 	fs.Usage = func() {
@@ -277,12 +275,6 @@ CONFIGURATION:
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	// Load configuration
-	urlPort := advertisePort
-	if urlPort == 0 {
-		urlPort = httpPort
-	}
-
 	// Convert Ollama config
 	var ollamaCfg *config.OllamaConfig
 	if globalCfg.Ollama != nil && globalCfg.Ollama.Enabled {
@@ -303,7 +295,7 @@ CONFIGURATION:
 		Dir:           configDir,
 		HTTPPort:      httpPort,
 		HTTPSPort:     httpsPort,
-		URLPort:       urlPort,
+		URLPort:       httpPort,
 		TLD:           tld,
 		Ollama:        ollamaCfg,
 		ClaudeCommand: claudeCmd,
@@ -330,11 +322,11 @@ CONFIGURATION:
 	printLogo()
 	fmt.Printf("fireup %s\n", version)
 	fmt.Printf("Configuration directory: %s\n", configDir)
-	fmt.Printf("Listening on http://127.0.0.1:%d\n", httpPort)
-	if urlPort == 80 {
+	fmt.Printf("HTTP listening on port %d\n", httpPort)
+	if httpPort == 80 {
 		fmt.Printf("Dashboard at http://fireup.%s\n", tld)
 	} else {
-		fmt.Printf("Dashboard at http://fireup.%s:%d\n", tld, urlPort)
+		fmt.Printf("Dashboard at http://fireup.%s:%d\n", tld, httpPort)
 	}
 
 	// Start DNS server for custom TLDs
@@ -348,19 +340,6 @@ CONFIGURATION:
 		fmt.Printf("DNS server on 127.0.0.1:%d for *.%s\n", dnsPort, tld)
 	}
 	fmt.Println()
-
-	// Warn if pf rules aren't set up but we're using port forwarding defaults
-	if httpPort != urlPort && urlPort == 80 {
-		if _, err := os.Stat(pfAnchorPath); os.IsNotExist(err) {
-			fmt.Println(colorYellow + "WARNING: URLs like http://myapp.localhost won't work yet.")
-			fmt.Println("")
-			fmt.Println("  fireup is running on port 9280, but your browser will")
-			fmt.Println("  try port 80. Run this once to set up the redirect:")
-			fmt.Println("")
-			fmt.Println("    sudo fireup install")
-			fmt.Println(colorReset)
-		}
-	}
 
 	if err := srv.Start(); err != nil {
 		log.Fatalf("Server error: %v", err)
@@ -436,8 +415,8 @@ OPTIONS:`)
 DESCRIPTION:
     Sets up fireup with all recommended components:
 
-    1. Port forwarding - Forward ports 80/443 to fireup
-       Lets you use http://myapp.test instead of http://localhost:9280
+    1. DNS resolution - Route *.test domains to fireup
+       Lets you use http://myapp.test
 
     2. HTTPS certificates - Generate a trusted local CA
        Enables https://myapp.test with no browser warnings
@@ -472,7 +451,7 @@ USAGE:
     fireup setup status
 
 Shows the status of:
-- Port forwarding (ports 80/443)
+- DNS resolution (*.test domains)
 - HTTPS certificates
 - Background service`)
 			os.Exit(0)
@@ -492,7 +471,7 @@ func runSetupComponentStatus() {
 	fmt.Println("────────────────────────────────────────────────")
 
 	portsStatus, portsDetail := checkPortsStatus()
-	fmt.Printf("  Ports     %s  %s\n", portsStatus, portsDetail)
+	fmt.Printf("  DNS       %s  %s\n", portsStatus, portsDetail)
 
 	certStatus, certDetail := checkCertStatus()
 	fmt.Printf("  Cert      %s  %s\n", certStatus, certDetail)
@@ -525,7 +504,7 @@ DESCRIPTION:
     Removes all fireup components:
     - Stops and removes the background service
     - Removes HTTPS certificates and CA from trust store
-    - Removes port forwarding rules
+    - Removes DNS resolver configuration
 
     The wizard explains each step and asks for confirmation.`)
 	}
@@ -917,11 +896,10 @@ func runSetupWizard(configDir, tld string) {
 	fmt.Println()
 	fmt.Println("This wizard will configure fireup with three components:")
 	fmt.Println()
-	fmt.Println("  1. PORT FORWARDING")
-	fmt.Println("     Redirects ports 80 and 443 to fireup, so you can access")
-	fmt.Println("     your apps at http://myapp.test instead of http://localhost:9280")
+	fmt.Println("  1. DNS RESOLUTION")
+	fmt.Println("     Routes *.test domains to fireup, so you can access")
+	fmt.Println("     your apps at http://myapp.test")
 	fmt.Println("     Requires: sudo")
-	fmt.Println("       - Writes to /etc/pf.anchors/fireup (firewall rules)")
 	fmt.Printf("       - Writes to /etc/resolver/%s (DNS resolution)\n", tld)
 	fmt.Println()
 	fmt.Println("  2. HTTPS CERTIFICATES")
@@ -952,72 +930,26 @@ func runSetupWizard(configDir, tld string) {
 	fmt.Println()
 	fmt.Println("─────────────────────────────────────────────────────────────────")
 
-	// Step 1: Port forwarding
+	// Step 1: DNS resolution
 	fmt.Println()
-	fmt.Println("Step 1/3: Port Forwarding")
+	fmt.Println("Step 1/3: DNS Resolution")
 	fmt.Println()
-	if isPortForwardingInstalled(tld) {
-		if isPfPlistOutdated() {
-			fmt.Printf("%s⚠ Installed but config differs%s\n", colorYellow, colorReset)
-			fmt.Println("  Found: /etc/pf.anchors/fireup")
-			fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist (differs)")
-			fmt.Printf("  Found: /etc/resolver/%s\n", tld)
-			fmt.Println()
-			fmt.Println("Requires: sudo (will prompt for password)")
-			fmt.Println()
-			if confirmStep("Update port forwarding configuration?") {
-				if err := runPortsInstall(configDir, tld); err != nil {
-					fmt.Printf("\n%s⚠ Update failed: %v%s\n", colorYellow, err, colorReset)
-				} else {
-					fmt.Printf("%s✓ Port forwarding updated%s\n", colorGreen, colorReset)
-				}
-			} else {
-				fmt.Println("Skipped. You can update later with: fireup ports install")
-			}
-		} else {
-			// Files are installed and config matches — but are the rules actually active?
-			mark, detail := checkPortsStatus()
-			if mark == "✓" {
-				fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
-				fmt.Println("  Found: /etc/pf.anchors/fireup")
-				fmt.Println("  Found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
-				fmt.Printf("  Found: /etc/resolver/%s\n", tld)
-			} else {
-				fmt.Printf("%s⚠ Installed but not active%s (%s)\n", colorYellow, colorReset, detail)
-				fmt.Println("  Files are in place but port forwarding rules aren't loaded.")
-				fmt.Println("  This can happen after a macOS update resets /etc/pf.conf.")
-				fmt.Println()
-				fmt.Println("Requires: sudo (will prompt for password)")
-				fmt.Println()
-				if confirmStep("Repair port forwarding?") {
-					os.Setenv("FIREUP_YES", "1")
-					if err := runPortsInstall(configDir, tld); err != nil {
-						fmt.Printf("\n%s⚠ Repair failed: %v%s\n", colorYellow, err, colorReset)
-					} else {
-						fmt.Printf("%s✓ Port forwarding repaired%s\n", colorGreen, colorReset)
-					}
-					os.Unsetenv("FIREUP_YES")
-				} else {
-					fmt.Println("Skipped. You can repair with: fireup ports install")
-				}
-			}
-		}
+	if isDNSInstalled(tld) {
+		fmt.Printf("%s✓ Already installed%s\n", colorGreen, colorReset)
+		fmt.Printf("  Found: /etc/resolver/%s\n", tld)
 	} else {
-		fmt.Println("This step lets you access apps at http://myapp.test instead of")
-		fmt.Println("http://localhost:9280. It configures macOS packet filter (pf) to")
-		fmt.Println("redirect ports 80/443 to fireup.")
+		fmt.Println("This step lets you access apps at http://myapp.test by routing")
+		fmt.Printf("*.%s domains to fireup's built-in DNS server.\n", tld)
 		fmt.Println()
 		fmt.Println("Requires: sudo (will prompt for password)")
 
-		// Show summary and confirm (? shows full diff)
-		if confirmPortsInstall(tld, "Install port forwarding?") {
-			// Set FIREUP_YES to skip the second confirmation in runPortsInstall
+		if confirmPortsInstall(tld, "Install DNS resolver?") {
 			os.Setenv("FIREUP_YES", "1")
 			if err := runPortsInstall(configDir, tld); err != nil {
-				fmt.Printf("\n%s⚠ Port forwarding failed: %v%s\n", colorYellow, err, colorReset)
+				fmt.Printf("\n%s⚠ DNS setup failed: %v%s\n", colorYellow, err, colorReset)
 				fmt.Println("You can retry later with: fireup ports install")
 			} else {
-				fmt.Printf("%s✓ Port forwarding installed%s\n", colorGreen, colorReset)
+				fmt.Printf("%s✓ DNS resolver installed%s\n", colorGreen, colorReset)
 			}
 			os.Unsetenv("FIREUP_YES")
 		} else {
@@ -1185,27 +1117,22 @@ func runTeardownWizard(tld string) {
 	fmt.Println()
 	fmt.Println("─────────────────────────────────────────────────────────────────")
 
-	// Step 3: Port forwarding
+	// Step 3: DNS resolution
 	fmt.Println()
-	fmt.Println("Step 3/3: Port Forwarding")
+	fmt.Println("Step 3/3: DNS Resolution")
 	fmt.Println()
-	if !isPortForwardingInstalled(tld) {
+	if !isDNSInstalled(tld) {
 		fmt.Printf("%s✓ Already removed%s\n", colorGreen, colorReset)
-		fmt.Println("  Not found: /etc/pf.anchors/fireup")
-		fmt.Println("  Not found: /Library/LaunchDaemons/dev.fireup.pfctl.plist")
 		fmt.Printf("  Not found: /etc/resolver/%s\n", tld)
 	} else {
 		fmt.Println("Requires: sudo (will prompt for password)")
-		// Show summary and confirm (? shows full diff)
 		plan := portsUninstallPlan(tld)
-		if confirmWithPlan(plan, "Remove port forwarding?") {
-			// Set FIREUP_YES to skip the second confirmation in runPortsUninstall
+		if confirmWithPlan(plan, "Remove DNS resolver?") {
 			os.Setenv("FIREUP_YES", "1")
 			if err := runPortsUninstall(tld); err != nil {
-				fmt.Printf("%s⚠ Port forwarding removal failed: %v%s\n", colorYellow, err, colorReset)
+				fmt.Printf("%s⚠ DNS resolver removal failed: %v%s\n", colorYellow, err, colorReset)
 			}
 			os.Unsetenv("FIREUP_YES")
-			// runPortsUninstall prints its own success message
 		} else {
 			fmt.Println("Skipped.")
 		}
@@ -1219,30 +1146,23 @@ func runTeardownWizard(tld string) {
 	fmt.Println("To reinstall, run: fireup setup")
 }
 
-// checkPortsStatus returns the status of port forwarding
+// checkPortsStatus returns the status of DNS resolution and port binding
 func checkPortsStatus() (string, string) {
-	// Check if anchor file exists
-	if _, err := os.Stat(pfAnchorPath); os.IsNotExist(err) {
-		return "✗", "not installed"
+	globalCfg, _ := getConfigWithDefaults()
+	tld := globalCfg.TLD
+
+	resolverPath := fmt.Sprintf("/etc/resolver/%s", tld)
+	if _, err := os.Stat(resolverPath); os.IsNotExist(err) {
+		return "✗", fmt.Sprintf("DNS resolver not installed (/etc/resolver/%s)", tld)
 	}
 
-	// Check if pf rules are loaded by checking if our anchor has rules
-	// Note: This requires root access, so it may fail even when forwarding works
-	cmd := exec.Command("/sbin/pfctl", "-a", "fireup", "-sr")
-	output, err := cmd.Output()
-	if err == nil && len(output) > 0 {
-		return "✓", "80→9280, 443→9443"
-	}
-
-	// Fallback: try connecting to port 80 to see if forwarding is actually working
-	// This works even without root access to read pf rules
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 500*time.Millisecond)
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", DefaultHTTPPort), 500*time.Millisecond)
 	if err == nil {
 		conn.Close()
-		return "✓", "80→9280, 443→9443"
+		return "✓", fmt.Sprintf("listening on port %d", DefaultHTTPPort)
 	}
 
-	return "✗", "installed but not active"
+	return "⚠", fmt.Sprintf("DNS installed, but nothing listening on port %d", DefaultHTTPPort)
 }
 
 // checkCertStatus returns the status of HTTPS certificates

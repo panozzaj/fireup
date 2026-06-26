@@ -12,10 +12,10 @@ Start Tailscale Serve to expose fireup to your tailnet.
 
 ```bash
 fireup tailscale serve
-# Runs: tailscale serve http://127.0.0.1:9280
+# Runs: tailscale serve http://127.0.0.1:80
 
 fireup tailscale serve --bg
-# Runs in background: tailscale serve --bg http://127.0.0.1:9280
+# Runs in background: tailscale serve --bg http://127.0.0.1:80
 ```
 
 Output should show:
@@ -46,4 +46,4 @@ fireup tailscale stop
 - Shell out to `tailscale` CLI (don't try to use Tailscale's Go library)
 - Check if `tailscale` is installed and in PATH
 - Get machine name from `tailscale status --json` for displaying the URL
-- Use port 9280 (fireup's default HTTP port)
+- Use port 80 (fireup's default HTTP port)
