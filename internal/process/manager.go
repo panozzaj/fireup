@@ -198,162 +198,24 @@ func (m *Manager) releasePort(port int) {
 	delete(m.reservedPorts, port)
 }
 
-// Start starts a process
+// Start starts a process and blocks until it's ready (up to 30s).
 func (m *Manager) Start(name, command, dir string, env map[string]string) (*Process, error) {
 	m.mu.Lock()
 
-	// Check if already running
 	if p, exists := m.processes[name]; exists && p.IsRunning() {
 		m.mu.Unlock()
 		return p, nil
 	}
 
-	// Clean up stale Rails PID file if this looks like a Rails server
-	if strings.Contains(command, "rails server") || strings.Contains(command, "rails s") {
-		cleanupRailsPID(dir)
-	}
-
-	// Check if working directory exists
-	if dir != "" {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			m.mu.Unlock()
-			return nil, fmt.Errorf("working directory does not exist: %s", dir)
-		}
-	}
-
-	// Find a free port
-	port, err := m.findFreePort()
+	proc, port, err := m.spawnProcess(name, command, dir, env)
 	if err != nil {
-		m.mu.Unlock()
 		return nil, err
 	}
-	fmt.Printf("[fireup] Starting %s on port %d\n", name, port)
 
-	// Create process
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Build environment
-	procEnv := os.Environ()
-	procEnv = append(procEnv, fmt.Sprintf("PORT=%d", port))
-	procEnv = append(procEnv, "FORCE_COLOR=1")
-	portStr := fmt.Sprintf("%d", port)
-	for k, v := range env {
-		// Expand $PORT in env values
-		v = strings.ReplaceAll(v, "$PORT", portStr)
-		procEnv = append(procEnv, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// Parse command (handle shell execution)
-	// Use interactive login shell to ensure user's environment (rvm, rbenv, nvm, etc.) is loaded
-	// -l (login) sources .zprofile; -i (interactive) sources .zshrc/.bashrc
-	shell := getUserShell()
-	cmd := exec.CommandContext(ctx, shell, "-i", "-l", "-c", command)
-	cmd.Dir = dir
-	cmd.Env = procEnv
-	// Run in own process group so we can kill the entire tree
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	// Set up logging
-	logs := NewLogBuffer(1000)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		m.releasePort(port)
-		m.mu.Unlock()
-		return nil, fmt.Errorf("stdout pipe: %w", err)
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		m.releasePort(port)
-		m.mu.Unlock()
-		return nil, fmt.Errorf("stderr pipe: %w", err)
-	}
-
-	proc := &Process{
-		Name:    name,
-		Command: command,
-		Dir:     dir,
-		Port:    port,
-		Env:     env,
-		cmd:     cmd,
-		cancel:  cancel,
-		logs:    logs,
-		started: time.Now(),
-	}
-
-	// Start process
-	if err := cmd.Start(); err != nil {
-		cancel()
-		m.releasePort(port)
-		m.mu.Unlock()
-		return nil, fmt.Errorf("start process: %w", err)
-	}
-
-	// Stream logs
-	go streamLogs(stdout, logs, name)
-	go streamLogs(stderr, logs, name)
-
-	// Monitor for exit
-	go func() {
-		err := cmd.Wait()
-		// Write log BEFORE setting failed flag to avoid race condition
-		// where status shows "failed" but logs are empty
-		if err != nil {
-			proc.logs.Write([]byte("[fireup] Process exited\n"))
-		}
-		proc.mu.Lock()
-		if err != nil {
-			proc.failed = true
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				proc.exitError = fmt.Sprintf("exit code %d", exitErr.ExitCode())
-			} else {
-				proc.exitError = err.Error()
-			}
-		}
-		proc.mu.Unlock()
-		// Don't delete failed processes so we can show their status
-		// They'll be replaced if started again
-	}()
-
-	proc.starting = true
 	m.processes[name] = proc
-
-	// Release lock BEFORE waiting for port - this can take a while and would block all requests
 	m.mu.Unlock()
 
-	// Wait for port to be ready (keep checking until port ready or process exits)
-	go func() {
-		// Release port reservation when done (process bound or exited)
-		defer func() {
-			m.mu.Lock()
-			m.releasePort(port)
-			m.mu.Unlock()
-		}()
-
-		for {
-			if proc.cmd.ProcessState != nil {
-				proc.mu.Lock()
-				proc.starting = false
-				proc.mu.Unlock()
-				return
-			}
-
-			if addr := probePort(port, 100*time.Millisecond); addr != "" {
-				proc.mu.Lock()
-				proc.Host = addr
-				proc.starting = false
-				proc.mu.Unlock()
-				return
-			}
-
-			time.Sleep(500 * time.Millisecond)
-		}
-	}()
-
-	waitForPort(port, 30*time.Second)
+	m.waitForReady(proc, port, true)
 
 	return proc, nil
 }
@@ -369,51 +231,57 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		return p, nil
 	}
 
+	proc, port, err := m.spawnProcess(name, command, dir, env)
+	if err != nil {
+		return nil, err
+	}
+
+	m.processes[name] = proc
+	m.mu.Unlock()
+
+	m.waitForReady(proc, port, false)
+
+	return proc, nil
+}
+
+// spawnProcess creates and starts a process. Caller must hold m.mu.
+func (m *Manager) spawnProcess(name, command, dir string, env map[string]string) (*Process, int, error) {
 	// Clean up stale Rails PID file if this looks like a Rails server
 	if strings.Contains(command, "rails server") || strings.Contains(command, "rails s") {
 		cleanupRailsPID(dir)
 	}
 
-	// Check if working directory exists
 	if dir != "" {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			m.mu.Unlock()
-			return nil, fmt.Errorf("working directory does not exist: %s", dir)
+			return nil, 0, fmt.Errorf("working directory does not exist: %s", dir)
 		}
 	}
 
-	// Find a free port
 	port, err := m.findFreePort()
 	if err != nil {
 		m.mu.Unlock()
-		return nil, err
+		return nil, 0, err
 	}
 	fmt.Printf("[fireup] Starting %s on port %d\n", name, port)
 
-	// Create process
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Build environment
 	procEnv := os.Environ()
 	procEnv = append(procEnv, fmt.Sprintf("PORT=%d", port))
 	procEnv = append(procEnv, "FORCE_COLOR=1")
 	portStr := fmt.Sprintf("%d", port)
 	for k, v := range env {
-		// Expand $PORT in env values
 		v = strings.ReplaceAll(v, "$PORT", portStr)
 		procEnv = append(procEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Parse command (handle shell execution)
-	// Use interactive login shell to ensure user's environment (rvm, rbenv, nvm, etc.) is loaded
-	// -l (login) sources .zprofile; -i (interactive) sources .zshrc/.bashrc
 	shell := getUserShell()
 	cmd := exec.CommandContext(ctx, shell, "-i", "-l", "-c", command)
 	cmd.Dir = dir
 	cmd.Env = procEnv
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// Set up logging
 	logs := NewLogBuffer(1000)
 
 	stdout, err := cmd.StdoutPipe()
@@ -421,7 +289,7 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		cancel()
 		m.releasePort(port)
 		m.mu.Unlock()
-		return nil, fmt.Errorf("stdout pipe: %w", err)
+		return nil, 0, fmt.Errorf("stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -429,38 +297,34 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		cancel()
 		m.releasePort(port)
 		m.mu.Unlock()
-		return nil, fmt.Errorf("stderr pipe: %w", err)
+		return nil, 0, fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	proc := &Process{
-		Name:    name,
-		Command: command,
-		Dir:     dir,
-		Port:    port,
-		Env:     env,
-		cmd:     cmd,
-		cancel:  cancel,
-		logs:    logs,
-		started: time.Now(),
+		Name:     name,
+		Command:  command,
+		Dir:      dir,
+		Port:     port,
+		Env:      env,
+		cmd:      cmd,
+		cancel:   cancel,
+		logs:     logs,
+		started:  time.Now(),
+		starting: true,
 	}
 
-	// Start process
 	if err := cmd.Start(); err != nil {
 		cancel()
 		m.releasePort(port)
 		m.mu.Unlock()
-		return nil, fmt.Errorf("start process: %w", err)
+		return nil, 0, fmt.Errorf("start process: %w", err)
 	}
 
-	// Stream logs
 	go streamLogs(stdout, logs, name)
 	go streamLogs(stderr, logs, name)
 
-	// Monitor for exit
 	go func() {
 		err := cmd.Wait()
-		// Write log BEFORE setting failed flag to avoid race condition
-		// where status shows "failed" but logs are empty
 		if err != nil {
 			proc.logs.Write([]byte("[fireup] Process exited\n"))
 		}
@@ -476,33 +340,68 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 		proc.mu.Unlock()
 	}()
 
-	proc.starting = true
-	m.processes[name] = proc
-	m.mu.Unlock()
+	return proc, port, nil
+}
 
-	// Wait for port in background (keep checking until port ready or process exits)
-	go func() {
-		for {
-			if proc.cmd.ProcessState != nil {
-				proc.mu.Lock()
-				proc.starting = false
-				proc.mu.Unlock()
-				return
+// waitForReady monitors a process until it's ready. For commands that use
+// $PORT, it probes the port. For commands that don't (daemons, watchers),
+// it treats process-alive as ready after a brief grace period.
+// If block is true, waits up to 30s before returning.
+func (m *Manager) waitForReady(proc *Process, port int, block bool) {
+	if commandUsesPort(proc.Command) {
+		go func() {
+			defer func() {
+				m.mu.Lock()
+				m.releasePort(port)
+				m.mu.Unlock()
+			}()
+
+			for {
+				if proc.cmd.ProcessState != nil {
+					proc.mu.Lock()
+					proc.starting = false
+					proc.mu.Unlock()
+					return
+				}
+
+				if addr := probePort(port, 100*time.Millisecond); addr != "" {
+					proc.mu.Lock()
+					proc.Host = addr
+					proc.starting = false
+					proc.mu.Unlock()
+					return
+				}
+
+				time.Sleep(500 * time.Millisecond)
 			}
+		}()
 
-			if addr := probePort(port, 100*time.Millisecond); addr != "" {
-				proc.mu.Lock()
-				proc.Host = addr
-				proc.starting = false
-				proc.mu.Unlock()
-				return
-			}
-
-			time.Sleep(500 * time.Millisecond)
+		if block {
+			waitForPort(port, 30*time.Second)
 		}
-	}()
+	} else {
+		// No $PORT — treat process-alive as ready after a grace period
+		go func() {
+			defer func() {
+				m.mu.Lock()
+				m.releasePort(port)
+				m.mu.Unlock()
+			}()
 
-	return proc, nil
+			time.Sleep(2 * time.Second)
+
+			proc.mu.Lock()
+			if proc.cmd.ProcessState == nil {
+				proc.Host = "127.0.0.1"
+				proc.starting = false
+			}
+			proc.mu.Unlock()
+		}()
+
+		if block {
+			time.Sleep(2 * time.Second)
+		}
+	}
 }
 
 // streamLogs reads from a reader and writes to the log buffer
@@ -556,6 +455,12 @@ func cleanupRailsPID(dir string) {
 	time.Sleep(100 * time.Millisecond)
 	process.Signal(syscall.SIGKILL)
 	os.Remove(pidFile)
+}
+
+// commandUsesPort returns true if the command references $PORT,
+// meaning it expects fireup to assign and probe a port.
+func commandUsesPort(command string) bool {
+	return strings.Contains(command, "$PORT")
 }
 
 // probePort checks if anything is listening on the given port.

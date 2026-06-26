@@ -326,6 +326,60 @@ func TestWaitForPort(t *testing.T) {
 	})
 }
 
+func TestCommandUsesPort(t *testing.T) {
+	t.Run("detects $PORT in command", func(t *testing.T) {
+		if !commandUsesPort("rails server -p $PORT") {
+			t.Error("expected true for command with $PORT")
+		}
+	})
+
+	t.Run("detects $PORT mid-string", func(t *testing.T) {
+		if !commandUsesPort("npx vite --port $PORT --host 127.0.0.1") {
+			t.Error("expected true for command with $PORT in middle")
+		}
+	})
+
+	t.Run("returns false for command without $PORT", func(t *testing.T) {
+		if commandUsesPort("good_job start") {
+			t.Error("expected false for command without $PORT")
+		}
+	})
+
+	t.Run("returns false for command with PORT in env assignment", func(t *testing.T) {
+		if commandUsesPort("bin/shakapacker-dev-server") {
+			t.Error("expected false for command without $PORT")
+		}
+	})
+
+	t.Run("returns false for empty command", func(t *testing.T) {
+		if commandUsesPort("") {
+			t.Error("expected false for empty command")
+		}
+	})
+}
+
+func TestProcessReadyWithoutPort(t *testing.T) {
+	t.Run("port-less process becomes running without readiness probe", func(t *testing.T) {
+		m := NewManager()
+		proc, err := m.StartAsync("test-daemon", "sleep 10", "/tmp", nil)
+		if err != nil {
+			t.Fatalf("StartAsync failed: %v", err)
+		}
+		defer m.Stop("test-daemon")
+
+		// Command doesn't contain $PORT, so process should become
+		// running (not stuck in starting) after a brief grace period
+		time.Sleep(3 * time.Second)
+
+		if !proc.IsRunning() {
+			t.Error("expected port-less process to be running")
+		}
+		if proc.IsStarting() {
+			t.Error("expected port-less process to not be starting")
+		}
+	})
+}
+
 func TestPortReservation(t *testing.T) {
 	t.Run("findFreePort reserves the port", func(t *testing.T) {
 		m := NewManager()
