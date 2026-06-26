@@ -50,6 +50,7 @@ type Process struct {
 	Command string
 	Dir     string
 	Port    int
+	Host    string // IP the process is reachable on (127.0.0.1 or ::1)
 	Env     map[string]string
 
 	cmd       *exec.Cmd
@@ -333,7 +334,6 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 		}()
 
 		for {
-			// Check if process has exited
 			if proc.cmd.ProcessState != nil {
 				proc.mu.Lock()
 				proc.starting = false
@@ -341,11 +341,9 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 				return
 			}
 
-			// Check if port is ready
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
-			if err == nil {
-				conn.Close()
+			if addr := probePort(port, 100*time.Millisecond); addr != "" {
 				proc.mu.Lock()
+				proc.Host = addr
 				proc.starting = false
 				proc.mu.Unlock()
 				return
@@ -355,8 +353,6 @@ func (m *Manager) Start(name, command, dir string, env map[string]string) (*Proc
 		}
 	}()
 
-	// Wait up to 30s for initial startup, then return
-	// Process stays in "starting" state until port is actually ready
 	waitForPort(port, 30*time.Second)
 
 	return proc, nil
@@ -487,7 +483,6 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 	// Wait for port in background (keep checking until port ready or process exits)
 	go func() {
 		for {
-			// Check if process has exited
 			if proc.cmd.ProcessState != nil {
 				proc.mu.Lock()
 				proc.starting = false
@@ -495,11 +490,9 @@ func (m *Manager) StartAsync(name, command, dir string, env map[string]string) (
 				return
 			}
 
-			// Check if port is ready
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
-			if err == nil {
-				conn.Close()
+			if addr := probePort(port, 100*time.Millisecond); addr != "" {
 				proc.mu.Lock()
+				proc.Host = addr
 				proc.starting = false
 				proc.mu.Unlock()
 				return
@@ -565,13 +558,28 @@ func cleanupRailsPID(dir string) {
 	os.Remove(pidFile)
 }
 
+// probePort checks if anything is listening on the given port.
+// Tries 127.0.0.1 first, then [::1]. Returns the IP that responded,
+// or "" if neither is reachable.
+func probePort(port int, timeout time.Duration) string {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), timeout)
+	if err == nil {
+		conn.Close()
+		return "127.0.0.1"
+	}
+	conn, err = net.DialTimeout("tcp", fmt.Sprintf("[::1]:%d", port), timeout)
+	if err == nil {
+		conn.Close()
+		return "::1"
+	}
+	return ""
+}
+
 // waitForPort waits for a port to become available
 func waitForPort(port int, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
-		if err == nil {
-			conn.Close()
+		if addr := probePort(port, 100*time.Millisecond); addr != "" {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)

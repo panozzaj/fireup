@@ -22,7 +22,7 @@ func TestReverseProxy_HTTP(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	// Proxy server
 	proxy := httptest.NewServer(rp)
@@ -53,7 +53,7 @@ func TestReverseProxy_ForwardsHeaders(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -72,7 +72,7 @@ func TestReverseProxy_ForwardsHeaders(t *testing.T) {
 
 func TestReverseProxy_ErrorHandler(t *testing.T) {
 	// Proxy to a port with nothing listening
-	rp := NewReverseProxy(19999, "dark")
+	rp := NewReverseProxy("", 19999, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -101,7 +101,7 @@ func TestReverseProxy_CacheBusting(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -126,7 +126,7 @@ func TestReverseProxy_NoCacheBustingForNonHTML(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -214,7 +214,7 @@ func TestReverseProxy_WebSocketRelay(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -288,7 +288,7 @@ func TestReverseProxy_WebSocketRelay(t *testing.T) {
 
 func TestReverseProxy_WebSocketBackendDown(t *testing.T) {
 	// Proxy to a port with nothing listening — WebSocket upgrade should fail gracefully
-	rp := NewReverseProxy(19999, "dark")
+	rp := NewReverseProxy("", 19999, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()
@@ -330,7 +330,7 @@ func TestReverseProxy_RegularUpgradeNotIntercepted(t *testing.T) {
 	defer backend.Close()
 
 	port := portFromURL(t, backend.URL)
-	rp := NewReverseProxy(port, "dark")
+	rp := NewReverseProxy("", port, "dark")
 
 	proxy := httptest.NewServer(rp)
 	defer proxy.Close()

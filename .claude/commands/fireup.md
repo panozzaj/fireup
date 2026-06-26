@@ -18,6 +18,5 @@ Config files are in: `~/.config/fireup/`
 - The API/backend should be a separate service named `api` (accessed at `api-<project>.test`)
 - Use `depends_on: [api]` on the web service to ensure the backend starts first
 - For Vite projects:
-    - Use `--host 127.0.0.1` in the fireup cmd (e.g. `npx vite --port $PORT --host 127.0.0.1`). Vite defaults to IPv6 (`::1`) which breaks fireup's IPv4 readiness check, causing the service to appear stuck as "idle" with the interstitial page.
-    - Add the fireup host to `server.allowedHosts` in vite.config.ts (e.g. `allowedHosts: ['<project>.test']`)
+    - Add the fireup host to `server.allowedHosts` in vite.config.ts (e.g. `allowedHosts: ['<project>.test']`), or set `allowedHosts: true` to allow all hosts
     - Set the API proxy target to `http://api-<project>.test`

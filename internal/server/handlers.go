@@ -135,14 +135,14 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request, app *config.A
 	switch app.Type {
 	case config.AppTypePort:
 		// Simple proxy to fixed port
-		proxy.NewReverseProxy(app.Port, s.getTheme()).ServeHTTP(w, r)
+		proxy.NewReverseProxy("", app.Port, s.getTheme()).ServeHTTP(w, r)
 
 	case config.AppTypeCommand:
 		// Check process status and serve appropriately
 		proc, found := s.procs.Get(app.Name)
 		if found && proc.IsRunning() {
 			// Already running - proxy directly
-			proxy.NewReverseProxy(proc.Port, s.getTheme()).ServeHTTP(w, r)
+			proxy.NewReverseProxy(proc.Host, proc.Port, s.getTheme()).ServeHTTP(w, r)
 			return
 		}
 		if found && proc.HasFailed() {
@@ -254,7 +254,7 @@ func (s *Server) handleService(w http.ResponseWriter, r *http.Request, app *conf
 	if found && proc.IsRunning() {
 		// Already running - proxy directly
 		s.logRequest("  -> PROXY to port %d", proc.Port)
-		proxy.NewReverseProxy(proc.Port, s.getTheme()).ServeHTTP(w, r)
+		proxy.NewReverseProxy(proc.Host, proc.Port, s.getTheme()).ServeHTTP(w, r)
 		return
 	}
 	if found && proc.HasFailed() {

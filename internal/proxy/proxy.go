@@ -19,9 +19,17 @@ type ReverseProxy struct {
 	proxy  *httputil.ReverseProxy
 }
 
-// NewReverseProxy creates a new reverse proxy to the given port
-func NewReverseProxy(port int, theme string) *ReverseProxy {
-	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+// NewReverseProxy creates a new reverse proxy to the given host and port.
+// host should be an IP like "127.0.0.1" or "::1"; defaults to 127.0.0.1.
+func NewReverseProxy(host string, port int, theme string) *ReverseProxy {
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := host
+	if strings.Contains(host, ":") {
+		addr = "[" + host + "]"
+	}
+	target, _ := url.Parse(fmt.Sprintf("http://%s:%d", addr, port))
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 

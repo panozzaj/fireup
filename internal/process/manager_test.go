@@ -232,6 +232,100 @@ func TestProcessStateQueries(t *testing.T) {
 	})
 }
 
+func TestProbePort(t *testing.T) {
+	t.Run("finds IPv4-only listener", func(t *testing.T) {
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("could not start IPv4 listener: %v", err)
+		}
+		defer ln.Close()
+		port := ln.Addr().(*net.TCPAddr).Port
+
+		addr := probePort(port, 500*time.Millisecond)
+		if addr != "127.0.0.1" {
+			t.Errorf("expected 127.0.0.1, got %q", addr)
+		}
+	})
+
+	t.Run("finds IPv6-only listener", func(t *testing.T) {
+		ln, err := net.Listen("tcp6", "[::1]:0")
+		if err != nil {
+			t.Skipf("IPv6 not available: %v", err)
+		}
+		defer ln.Close()
+		port := ln.Addr().(*net.TCPAddr).Port
+
+		addr := probePort(port, 500*time.Millisecond)
+		if addr != "::1" {
+			t.Errorf("expected ::1, got %q", addr)
+		}
+	})
+
+	t.Run("prefers IPv4 when both are listening", func(t *testing.T) {
+		ln4, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("could not start IPv4 listener: %v", err)
+		}
+		defer ln4.Close()
+		port := ln4.Addr().(*net.TCPAddr).Port
+
+		ln6, err := net.Listen("tcp6", fmt.Sprintf("[::1]:%d", port))
+		if err != nil {
+			t.Skipf("could not bind IPv6 to same port: %v", err)
+		}
+		defer ln6.Close()
+
+		addr := probePort(port, 500*time.Millisecond)
+		if addr != "127.0.0.1" {
+			t.Errorf("expected 127.0.0.1 (preferred), got %q", addr)
+		}
+	})
+
+	t.Run("returns empty when nothing is listening", func(t *testing.T) {
+		addr := probePort(59998, 200*time.Millisecond)
+		if addr != "" {
+			t.Errorf("expected empty string, got %q", addr)
+		}
+	})
+}
+
+func TestWaitForPort(t *testing.T) {
+	t.Run("succeeds for IPv4 listener", func(t *testing.T) {
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("could not start listener: %v", err)
+		}
+		defer ln.Close()
+		port := ln.Addr().(*net.TCPAddr).Port
+
+		err = waitForPort(port, 2*time.Second)
+		if err != nil {
+			t.Errorf("waitForPort should succeed for IPv4 listener: %v", err)
+		}
+	})
+
+	t.Run("succeeds for IPv6-only listener", func(t *testing.T) {
+		ln, err := net.Listen("tcp6", "[::1]:0")
+		if err != nil {
+			t.Skipf("IPv6 not available: %v", err)
+		}
+		defer ln.Close()
+		port := ln.Addr().(*net.TCPAddr).Port
+
+		err = waitForPort(port, 2*time.Second)
+		if err != nil {
+			t.Errorf("waitForPort should succeed for IPv6 listener: %v", err)
+		}
+	})
+
+	t.Run("times out when nothing is listening", func(t *testing.T) {
+		err := waitForPort(59997, 500*time.Millisecond)
+		if err == nil {
+			t.Error("waitForPort should time out when nothing is listening")
+		}
+	})
+}
+
 func TestPortReservation(t *testing.T) {
 	t.Run("findFreePort reserves the port", func(t *testing.T) {
 		m := NewManager()
