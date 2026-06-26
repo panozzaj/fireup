@@ -1,6 +1,8 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -40,6 +42,7 @@ func newTestServer(cfg *config.Config, apps *config.AppStore, procs *process.Man
 		cfg:         cfg,
 		apps:        apps,
 		procs:       procs,
+		requestLog:  process.NewLogBuffer(100),
 		broadcaster: NewBroadcaster(),
 	}
 }
@@ -797,4 +800,119 @@ services:
 	if strings.Contains(html, "<li>/focustrack/</li>") {
 		t.Error("multi-service app should list services, not app name")
 	}
+}
+
+// requestWithHost creates an HTTP request with the given Host header
+func requestWithHost(host, path string) *http.Request {
+	req := httptest.NewRequest("GET", path, nil)
+	req.Host = host
+	return req
+}
+
+func TestHandleRequestRouting(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	os.WriteFile(tmpDir+"/blog.yml", []byte("name: blog\nroot: /tmp\ncmd: echo hi\n"), 0644)
+	os.WriteFile(tmpDir+"/myapp.yml", []byte(`
+name: myapp
+root: /tmp
+services:
+  api:
+    cmd: echo api
+  web:
+    cmd: echo web
+    default: true
+`), 0644)
+	apps.Load()
+
+	t.Run("fireup.test routes to dashboard", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("fireup.test", "/"))
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "fireup") {
+			t.Error("expected dashboard HTML")
+		}
+	})
+
+	t.Run("fireup.test with port routes to dashboard", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("fireup.test:80", "/"))
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("fireup-test.test routes to welcome page", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("fireup-test.test", "/"))
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("unknown app returns 404", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("nonexistent.test", "/"))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "App not found") {
+			t.Error("expected 'App not found' in response")
+		}
+	})
+
+	t.Run("wrong TLD returns 400", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("blog.dev", "/"))
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Invalid host") {
+			t.Error("expected 'Invalid host' in response")
+		}
+	})
+
+	t.Run("known app routes to handleApp", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("blog.test", "/"))
+		// Blog isn't running, so we get the interstitial (starting page)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("service-app pattern routes to service", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("api-myapp.test", "/"))
+		// Service isn't running, so we get the interstitial
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("unknown service of known app falls through to app lookup", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("unknown-myapp.test", "/"))
+		// "unknown-myapp" is not a service, and "unknown-myapp" is not an app name
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("subdomain of fireup.test for missing service returns 404", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.handleRequest(w, requestWithHost("nope.fireup.test", "/"))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Service not found") {
+			t.Error("expected 'Service not found' in response")
+		}
+	})
 }
