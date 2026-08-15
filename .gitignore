@@ -19,3 +19,4 @@ package-lock.json
 
 # Claude Code local settings (machine-specific paths)
 .claude/settings.local.json
+.playwright-mcp/
