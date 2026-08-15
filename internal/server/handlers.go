@@ -75,7 +75,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorPage(w, http.StatusBadRequest,
 			"Invalid host",
 			fmt.Sprintf("Expected *.%s, got %s", s.cfg.TLD, host),
-			s.invalidHostHint(host))
+			s.invalidHostHint())
 		return
 	}
 
@@ -117,18 +117,15 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // invalidHostHint explains why fireup answered for a domain it does not own.
-// The only way a non-fireup domain reaches this server is if something on the
-// machine resolved it to 127.0.0.1 — nearly always a self-blocking /etc/hosts
-// entry. Removing that entry is not always enough, because the browser caches
-// both the DNS answer and the connection, so the recovery steps are included.
-func (s *Server) invalidHostHint(host string) string {
-	safeHost := html.EscapeString(host)
-	return fmt.Sprintf(`<p class="hint">fireup only serves *.%s, so something resolved %s to 127.0.0.1 — usually an /etc/hosts entry:
-grep %s /etc/hosts</p>
-<p class="hint">Already removed it? Your browser may still be holding the old DNS answer or connection:
-sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
-Chrome: chrome://net-internals/#dns → Clear host cache, then #sockets → Flush socket pools</p>`,
-		html.EscapeString(s.cfg.TLD), safeHost, safeHost)
+// A non-fireup domain only reaches this server if something on the machine
+// resolved it to 127.0.0.1 — nearly always a self-blocking /etc/hosts entry.
+// Removing that entry may not be enough on its own, since the browser caches
+// the DNS answer, so the flush commands are included. The stale-socket half of
+// the problem needs no instructions: this response closes the connection.
+func (s *Server) invalidHostHint() string {
+	return `<p class="note">Usually a leftover /etc/hosts entry. If you already removed it, flush the cached DNS answer:</p>
+<p class="hint">sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+chrome://net-internals/#dns → Clear host cache</p>`
 }
 
 // findApp tries to find an app by progressively shorter names

@@ -92,6 +92,15 @@ h1 {
     color: var(--text-secondary);
     margin-bottom: 16px;
 }
+/* Prose that accompanies a hint. Proportional and narrow so it reflows as
+   sentences, unlike .hint, which holds commands at the width they are typed. */
+.note {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    max-width: 460px;
+    margin: 0 auto 12px;
+}
 .hint {
     font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
     font-size: 13px;

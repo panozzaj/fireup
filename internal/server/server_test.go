@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/http/httptrace"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1064,5 +1065,47 @@ func TestInvalidHostEscapesHost(t *testing.T) {
 
 	if strings.Contains(w.Body.String(), "&amp;amp;") {
 		t.Error("expected the host to be escaped exactly once, got double-escaped output")
+	}
+}
+
+// hintLines returns the individual lines of every monospace hint block on a
+// page. Hints render with white-space: pre-line, so each line is laid out as
+// written rather than reflowed.
+func hintLines(body string) []string {
+	var lines []string
+	for _, block := range regexp.MustCompile(`(?s)<p class="hint">(.*?)</p>`).FindAllStringSubmatch(body, -1) {
+		for _, line := range strings.Split(strings.TrimSpace(block[1]), "\n") {
+			if line != "" {
+				lines = append(lines, line)
+			}
+		}
+	}
+	return lines
+}
+
+// TestHintLinesStayShort keeps hint blocks holding terminal-width commands
+// rather than paragraphs of prose. A long line wraps mid-sentence inside the
+// monospace box, which reads badly — explanation belongs in .note text, which
+// is proportional and reflows cleanly.
+func TestHintLinesStayShort(t *testing.T) {
+	const maxLen = 70
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	w := httptest.NewRecorder()
+	s.handleRequest(w, requestWithHost("news.ycombinator.com", "/"))
+
+	lines := hintLines(w.Body.String())
+	if len(lines) == 0 {
+		t.Fatal("expected the invalid-host page to render at least one hint line")
+	}
+	for _, line := range lines {
+		if len(line) > maxLen {
+			t.Errorf("hint line is %d chars, over the %d limit: %q", len(line), maxLen, line)
+		}
 	}
 }
