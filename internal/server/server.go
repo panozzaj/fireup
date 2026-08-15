@@ -15,6 +15,10 @@ import (
 	"github.com/panozzaj/fireup/internal/process"
 )
 
+// idleTimeout is how long an idle keep-alive connection to fireup is kept
+// before being closed. Roughly matches Chrome's own idle-socket timeout.
+const idleTimeout = 60 * time.Second
+
 // slugify converts a name to a URL-safe slug (lowercase, spaces to dashes)
 func slugify(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "-"))
@@ -238,9 +242,14 @@ func (s *Server) Start() error {
 	// IPv6 connections to [::1] also reach this socket via IPv4-mapped
 	// addresses on most systems; a separate [::] listener is not needed.
 	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.HTTPPort)
+	// IdleTimeout bounds how long a browser can hold a keep-alive socket to
+	// fireup. Go's default is unlimited, which lets a browser keep routing an
+	// origin here without ever re-resolving DNS. Only idle connections are
+	// affected — in-flight responses such as the status SSE stream are not.
 	s.httpSrv = &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:        addr,
+		Handler:     mux,
+		IdleTimeout: idleTimeout,
 	}
 
 	return s.httpSrv.ListenAndServe()
@@ -251,9 +260,10 @@ func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager) {
 	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.HTTPSPort)
 
 	srv := &http.Server{
-		Addr:      addr,
-		Handler:   handler,
-		TLSConfig: certManager.TLSConfig(),
+		Addr:        addr,
+		Handler:     handler,
+		TLSConfig:   certManager.TLSConfig(),
+		IdleTimeout: idleTimeout,
 	}
 
 	s.httpsSrv = srv
