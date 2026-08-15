@@ -99,7 +99,12 @@ h1 {
     background: var(--border-color);
     padding: 12px 16px;
     border-radius: 6px;
-    display: inline-block;
+    /* display: table shrink-wraps like inline-block but still stacks when a
+       page shows more than one hint; pre-line keeps multi-line commands readable */
+    display: table;
+    margin: 0 auto 12px;
+    text-align: left;
+    white-space: pre-line;
 }
 `
 

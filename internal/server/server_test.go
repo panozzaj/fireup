@@ -1,8 +1,10 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"os"
 	"strings"
 	"testing"
@@ -915,4 +917,152 @@ services:
 			t.Error("expected 'Service not found' in response")
 		}
 	})
+}
+
+// TestInvalidHostDoesNotKeepConnectionAlive covers the "I removed the
+// /etc/hosts block and the browser still shows fireup" case. A browser reuses
+// a pooled keep-alive socket for an origin without re-resolving DNS, so if
+// fireup keeps the connection open after serving "Invalid host", the user
+// stays stuck on fireup long after the hosts entry is gone.
+func TestInvalidHostDoesNotKeepConnectionAlive(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	srv := httptest.NewServer(http.HandlerFunc(s.handleRequest))
+	defer srv.Close()
+
+	// get issues a request with the given Host header and reports whether it
+	// rode on a connection recycled from the client's idle pool.
+	get := func(t *testing.T, client *http.Client, host string) (*http.Response, bool) {
+		t.Helper()
+		req, err := http.NewRequest("GET", srv.URL+"/", nil)
+		if err != nil {
+			t.Fatalf("building request: %v", err)
+		}
+		req.Host = host
+
+		var reused bool
+		trace := &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) { reused = info.Reused },
+		}
+		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request to %s: %v", host, err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		return resp, reused
+	}
+
+	// Control: a normal fireup host keeps the connection alive, which is what
+	// makes the assertion below meaningful rather than vacuously true.
+	t.Run("valid host reuses the connection", func(t *testing.T) {
+		client := &http.Client{Transport: &http.Transport{}}
+		defer client.CloseIdleConnections()
+
+		get(t, client, "fireup.test")
+		if _, reused := get(t, client, "fireup.test"); !reused {
+			t.Error("expected the second request to reuse the pooled connection")
+		}
+	})
+
+	t.Run("invalid host closes the connection", func(t *testing.T) {
+		client := &http.Client{Transport: &http.Transport{}}
+		defer client.CloseIdleConnections()
+
+		resp, _ := get(t, client, "bsky.app")
+		if !resp.Close {
+			t.Error("expected Connection: close on the invalid-host response")
+		}
+		if _, reused := get(t, client, "fireup.test"); reused {
+			t.Error("expected no pooled connection to survive the invalid-host response")
+		}
+	})
+}
+
+// TestErrorPagesAreNotCacheable guards against a browser caching an error page
+// and showing it after the underlying problem is fixed. 404 in particular is
+// heuristically cacheable when the response says nothing about caching.
+func TestErrorPagesAreNotCacheable(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	tests := []struct {
+		name       string
+		host       string
+		wantStatus int
+	}{
+		{"invalid host", "bsky.app", http.StatusBadRequest},
+		{"unknown app", "nonexistent.test", http.StatusNotFound},
+		{"unknown fireup service", "nope.fireup.test", http.StatusNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			s.handleRequest(w, requestWithHost(tt.host, "/"))
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected %d, got %d", tt.wantStatus, w.Code)
+			}
+			if cc := w.Header().Get("Cache-Control"); !strings.Contains(cc, "no-store") {
+				t.Errorf("expected Cache-Control to contain no-store, got %q", cc)
+			}
+		})
+	}
+}
+
+// TestInvalidHostPageExplainsHostsFile checks that the page tells the user why
+// fireup answered for a domain it does not own, and how to get unstuck.
+func TestInvalidHostPageExplainsHostsFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	w := httptest.NewRecorder()
+	s.handleRequest(w, requestWithHost("bsky.app", "/"))
+	body := w.Body.String()
+
+	for _, want := range []string{"/etc/hosts", "bsky.app", "dscacheutil"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected invalid-host page to mention %q", want)
+		}
+	}
+}
+
+// TestInvalidHostEscapesHost makes sure a hostile Host header cannot inject
+// markup into the error page, which renders its hint as raw HTML.
+func TestInvalidHostEscapesHost(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+
+	w := httptest.NewRecorder()
+	s.handleRequest(w, requestWithHost("<script>alert(1)</script>evil.com", "/"))
+
+	if strings.Contains(w.Body.String(), "<script>alert(1)</script>") {
+		t.Error("expected the host to be HTML-escaped in the error page")
+	}
+
+	// The message runs through html/template, which escapes on its own; the
+	// hint is injected as raw HTML and must be escaped by hand. Escaping the
+	// message too would double-escape it and show entities to the user.
+	w = httptest.NewRecorder()
+	s.handleRequest(w, requestWithHost("a&b.example.com", "/"))
+
+	if strings.Contains(w.Body.String(), "&amp;amp;") {
+		t.Error("expected the host to be escaped exactly once, got double-escaped output")
+	}
 }

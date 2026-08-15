@@ -12,6 +12,17 @@ import (
 	"github.com/panozzaj/fireup/internal/server/pages"
 )
 
+// writeErrorPage renders an error page with cache headers that keep browsers
+// from holding on to the response. Error pages are always transient — the app
+// may exist a second later — and 404s in particular are heuristically cacheable
+// if we say nothing.
+func (s *Server) writeErrorPage(w http.ResponseWriter, status int, title, message, hint string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.WriteHeader(status)
+	fmt.Fprint(w, pages.Error(title, message, hint, s.cfg.TLD, s.getTheme()))
+}
+
 // handleRequest routes requests based on hostname
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	host := r.Host
@@ -39,13 +50,10 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 			s.handleService(w, r, app, svc)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, pages.Error(
+		s.writeErrorPage(w, http.StatusNotFound,
 			"Service not found",
 			fmt.Sprintf("No service named '%s' in fireup-tests", subdomain),
-			fmt.Sprintf(`<p class="hint">Check available services at <a href="//fireup.%s">fireup.%s</a></p>`, s.cfg.TLD, s.cfg.TLD),
-			s.cfg.TLD, s.getTheme()))
+			fmt.Sprintf(`<p class="hint">Check available services at <a href="//fireup.%s">fireup.%s</a></p>`, s.cfg.TLD, s.cfg.TLD))
 		return
 	}
 
@@ -57,13 +65,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !strings.HasSuffix(host, "."+s.cfg.TLD) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, pages.Error(
+		// Something on this machine resolved a non-fireup domain to us —
+		// almost always a leftover /etc/hosts entry pointing it at 127.0.0.1.
+		// Close the connection instead of keeping it alive: browsers reuse a
+		// pooled keep-alive socket for the same origin without re-resolving
+		// DNS, so a kept-alive connection here would keep sending the user to
+		// fireup for minutes after they fix /etc/hosts.
+		w.Header().Set("Connection", "close")
+		s.writeErrorPage(w, http.StatusBadRequest,
 			"Invalid host",
 			fmt.Sprintf("Expected *.%s, got %s", s.cfg.TLD, host),
-			"",
-			s.cfg.TLD, s.getTheme()))
+			s.invalidHostHint(host))
 		return
 	}
 
@@ -94,17 +106,29 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, pages.Error(
+		s.writeErrorPage(w, http.StatusNotFound,
 			"App not found",
 			fmt.Sprintf("No app configured for '%s'", name),
-			fmt.Sprintf(`<p class="hint">Create config at: %s/%s.yml</p>`, html.EscapeString(s.cfg.Dir), html.EscapeString(name)),
-			s.cfg.TLD, s.getTheme()))
+			fmt.Sprintf(`<p class="hint">Create config at: %s/%s.yml</p>`, html.EscapeString(s.cfg.Dir), html.EscapeString(name)))
 		return
 	}
 
 	s.handleApp(w, r, app)
+}
+
+// invalidHostHint explains why fireup answered for a domain it does not own.
+// The only way a non-fireup domain reaches this server is if something on the
+// machine resolved it to 127.0.0.1 — nearly always a self-blocking /etc/hosts
+// entry. Removing that entry is not always enough, because the browser caches
+// both the DNS answer and the connection, so the recovery steps are included.
+func (s *Server) invalidHostHint(host string) string {
+	safeHost := html.EscapeString(host)
+	return fmt.Sprintf(`<p class="hint">fireup only serves *.%s, so something resolved %s to 127.0.0.1 — usually an /etc/hosts entry:
+grep %s /etc/hosts</p>
+<p class="hint">Already removed it? Your browser may still be holding the old DNS answer or connection:
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+Chrome: chrome://net-internals/#dns → Clear host cache, then #sockets → Flush socket pools</p>`,
+		html.EscapeString(s.cfg.TLD), safeHost, safeHost)
 }
 
 // findApp tries to find an app by progressively shorter names
