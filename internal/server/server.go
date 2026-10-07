@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -257,19 +258,23 @@ func (s *Server) Start() error {
 
 // startHTTPS starts the HTTPS server with dynamic certificate generation
 func (s *Server) startHTTPS(handler http.Handler, certManager *certs.Manager) {
-	addr := fmt.Sprintf("0.0.0.0:%d", s.cfg.HTTPSPort)
+	listeners, source, err := httpsListeners(launchdListeners, net.Listen, s.cfg.HTTPSPort)
+	if err != nil {
+		fmt.Printf("HTTPS server error: %v\n", err)
+		return
+	}
 
 	srv := &http.Server{
-		Addr:        addr,
 		Handler:     handler,
 		TLSConfig:   certManager.TLSConfig(),
 		IdleTimeout: idleTimeout,
 	}
 
 	s.httpsSrv = srv
-	fmt.Printf("HTTPS listening on port %d (dynamic certs)\n", s.cfg.HTTPSPort)
+	fmt.Printf("HTTPS listening on port %d via %s (dynamic certs)\n", s.cfg.HTTPSPort, source)
 
-	if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+	serveTLS := func(ln net.Listener) error { return srv.ServeTLS(ln, "", "") }
+	if err := serveAll(listeners, serveTLS); err != nil && err != http.ErrServerClosed {
 		fmt.Printf("HTTPS server error: %v\n", err)
 	}
 }

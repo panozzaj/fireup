@@ -153,6 +153,11 @@ func generateServicePlistContent() (string, error) {
 	// Generate plist content
 	// ExitTimeOut gives fireup time to gracefully stop all child processes
 	// before launchd sends SIGKILL (default is 20 seconds, we use 30)
+	//
+	// Sockets: launchd binds HTTPS on loopback as root and hands the sockets
+	// to fireup (see launchdListeners). An unprivileged fireup can only bind
+	// :443 on 0.0.0.0, which fails while another process holds :443 on a
+	// specific address, such as Tailscale Serve/Funnel on the tailnet address.
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -170,13 +175,31 @@ func generateServicePlistContent() (string, error) {
     <true/>
     <key>ExitTimeOut</key>
     <integer>30</integer>
+    <key>Sockets</key>
+    <dict>
+        <key>HTTPS</key>
+        <array>
+            <dict>
+                <key>SockNodeName</key>
+                <string>127.0.0.1</string>
+                <key>SockServiceName</key>
+                <string>%d</string>
+            </dict>
+            <dict>
+                <key>SockNodeName</key>
+                <string>::1</string>
+                <key>SockServiceName</key>
+                <string>%d</string>
+            </dict>
+        </array>
+    </dict>
     <key>StandardOutPath</key>
     <string>%s/stdout.log</string>
     <key>StandardErrorPath</key>
     <string>%s/stderr.log</string>
 </dict>
 </plist>
-`, binaryPath, envSection.String(), logsDir, logsDir), nil
+`, binaryPath, envSection.String(), DefaultHTTPSPort, DefaultHTTPSPort, logsDir, logsDir), nil
 }
 
 // serviceInstallPlan returns a Plan for service installation.
