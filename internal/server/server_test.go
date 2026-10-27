@@ -571,36 +571,37 @@ services:
 	})
 }
 
-// Tests for Tailscale Serve support
-// Tailscale Serve proxies requests from *.ts.net hosts using path-based routing
+// Tests for remote access (path-based routing)
+// Any non-TLD host (Tailscale *.ts.net, ngrok, etc.) uses path-based routing.
 
-func TestIsTailscaleHost(t *testing.T) {
+func TestIsRemoteHost(t *testing.T) {
+	tld := "test"
 	tests := []struct {
 		host     string
 		expected bool
 	}{
 		{"macbook-pro.tail094a69.ts.net", true},
 		{"my-machine.tailnet.ts.net", true},
-		{"foo.ts.net", true},
+		{"abc123.ngrok-free.app", true},
+		{"abc123.ngrok.io", true},
+		{"example.com", true},
 		{"fireup.test", false},
 		{"myapp.test", false},
-		{"example.com", false},
-		{"ts.net.example.com", false}, // ts.net must be suffix
-		{"", false},
+		{"", true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.host, func(t *testing.T) {
-			got := strings.HasSuffix(tc.host, ".ts.net")
+			got := !strings.HasSuffix(tc.host, "."+tld)
 			if got != tc.expected {
-				t.Errorf("isTailscaleHost(%q) = %v, want %v", tc.host, got, tc.expected)
+				t.Errorf("isRemoteHost(%q) = %v, want %v", tc.host, got, tc.expected)
 			}
 		})
 	}
 }
 
-func TestTailscalePathParsing(t *testing.T) {
-	// Test the path parsing logic used in handleTailscaleRequest
+func TestRemotePathParsing(t *testing.T) {
+	// Test the path parsing logic used in handleRemoteRequest
 	tests := []struct {
 		path            string
 		expectedName    string
@@ -634,7 +635,7 @@ func TestTailscalePathParsing(t *testing.T) {
 	}
 }
 
-func TestTailscaleServiceNameRouting(t *testing.T) {
+func TestRemoteServiceNameRouting(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{TLD: "test", Dir: tmpDir}
 	apps := config.NewAppStore(cfg)
@@ -657,7 +658,7 @@ services:
 		// Simulate path /api-focustrack/health
 		name := "api-focustrack"
 
-		// This is the logic from handleTailscaleRequest
+		// This is the logic from handleRemoteRequest
 		if idx := strings.Index(name, "-"); idx != -1 {
 			serviceName := name[:idx]
 			appName := name[idx+1:]
@@ -730,7 +731,7 @@ cmd: hugo server
 	})
 }
 
-func TestTailscaleAPIRouting(t *testing.T) {
+func TestRemoteAPIRouting(t *testing.T) {
 	// Test that /api/* paths are routed to dashboard API
 	tests := []struct {
 		path      string
@@ -869,14 +870,14 @@ services:
 		}
 	})
 
-	t.Run("wrong TLD returns 400", func(t *testing.T) {
+	t.Run("wrong TLD uses path-based routing", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		s.handleRequest(w, requestWithHost("blog.dev", "/"))
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected 400, got %d", w.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200 (remote access landing), got %d", w.Code)
 		}
-		if !strings.Contains(w.Body.String(), "Invalid host") {
-			t.Error("expected 'Invalid host' in response")
+		if !strings.Contains(w.Body.String(), "Remote Access") {
+			t.Error("expected 'Remote Access' in response")
 		}
 	})
 
@@ -971,16 +972,13 @@ func TestInvalidHostDoesNotKeepConnectionAlive(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid host closes the connection", func(t *testing.T) {
+	t.Run("non-TLD host uses path-based routing", func(t *testing.T) {
 		client := &http.Client{Transport: &http.Transport{}}
 		defer client.CloseIdleConnections()
 
 		resp, _ := get(t, client, "bsky.app")
-		if !resp.Close {
-			t.Error("expected Connection: close on the invalid-host response")
-		}
-		if _, reused := get(t, client, "fireup.test"); reused {
-			t.Error("expected no pooled connection to survive the invalid-host response")
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 (remote access landing), got %d", resp.StatusCode)
 		}
 	})
 }
@@ -1000,7 +998,6 @@ func TestErrorPagesAreNotCacheable(t *testing.T) {
 		host       string
 		wantStatus int
 	}{
-		{"invalid host", "bsky.app", http.StatusBadRequest},
 		{"unknown app", "nonexistent.test", http.StatusNotFound},
 		{"unknown fireup service", "nope.fireup.test", http.StatusNotFound},
 	}

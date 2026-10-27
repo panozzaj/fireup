@@ -43,13 +43,13 @@ type appStatus struct {
 	MemoryLimitMB int             `json:"memory_limit_mb,omitempty"`
 }
 
-// reservedTailscalePaths are path prefixes reserved for fireup internal use.
-// Apps/services with these names won't work correctly when accessed via Tailscale Serve.
-var reservedTailscalePaths = []string{"api"}
+// reservedRemotePaths are path prefixes reserved for fireup internal use.
+// Apps/services with these names won't work correctly via path-based remote access.
+var reservedRemotePaths = []string{"api"}
 
-// isReservedTailscalePath checks if a name conflicts with reserved Tailscale paths
-func isReservedTailscalePath(name string) bool {
-	for _, reserved := range reservedTailscalePaths {
+// isReservedRemotePath checks if a name conflicts with reserved path-routing paths
+func isReservedRemotePath(name string) bool {
+	for _, reserved := range reservedRemotePaths {
 		if name == reserved {
 			return true
 		}
@@ -97,15 +97,15 @@ func (s *Server) getStatus() []byte {
 			URL:         baseURL(app.Name),
 		}
 
-		// Check for reserved Tailscale path conflicts
-		if isReservedTailscalePath(app.Name) {
+		// Check for reserved remote path conflicts
+		if isReservedRemotePath(app.Name) {
 			as.Warnings = append(as.Warnings,
-				fmt.Sprintf("App name '%s' conflicts with reserved Tailscale path. Won't work via Tailscale Serve.", app.Name))
+				fmt.Sprintf("App name '%s' conflicts with reserved remote access path. Won't work via path-based routing.", app.Name))
 		}
 		for _, alias := range app.Aliases {
-			if isReservedTailscalePath(alias) {
+			if isReservedRemotePath(alias) {
 				as.Warnings = append(as.Warnings,
-					fmt.Sprintf("Alias '%s' conflicts with reserved Tailscale path. Won't work via Tailscale Serve.", alias))
+					fmt.Sprintf("Alias '%s' conflicts with reserved remote access path. Won't work via path-based routing.", alias))
 			}
 		}
 

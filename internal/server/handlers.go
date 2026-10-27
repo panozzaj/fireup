@@ -58,24 +58,10 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse hostname: [service-]appname.tld
-	// Also support Tailscale Serve: requests from *.ts.net use path-based routing
-	if strings.HasSuffix(host, ".ts.net") {
-		s.handleTailscaleRequest(w, r)
-		return
-	}
-
+	// Non-TLD hosts (Tailscale *.ts.net, ngrok *.ngrok-free.app, etc.) use
+	// path-based routing: /appname/... or /service-appname/...
 	if !strings.HasSuffix(host, "."+s.cfg.TLD) {
-		// Something on this machine resolved a non-fireup domain to us —
-		// almost always a leftover /etc/hosts entry pointing it at 127.0.0.1.
-		// Close the connection instead of keeping it alive: browsers reuse a
-		// pooled keep-alive socket for the same origin without re-resolving
-		// DNS, so a kept-alive connection here would keep sending the user to
-		// fireup for minutes after they fix /etc/hosts.
-		w.Header().Set("Connection", "close")
-		s.writeErrorPage(w, http.StatusBadRequest,
-			"Invalid host",
-			fmt.Sprintf("Expected *.%s, got %s", s.cfg.TLD, host),
-			s.invalidHostHint())
+		s.handleRemoteRequest(w, r)
 		return
 	}
 
@@ -459,10 +445,11 @@ func (s *Server) resolveServiceName(name string) *ServiceMatch {
 	return nil
 }
 
-// handleTailscaleRequest handles requests from Tailscale Serve using path-based routing.
-// URL format: https://machine.tailnet.ts.net/appname/path... → routes to appname.test/path...
-// Also supports service names: /api-focustrack/... → routes to api service of focustrack app
-func (s *Server) handleTailscaleRequest(w http.ResponseWriter, r *http.Request) {
+// handleRemoteRequest handles requests from non-TLD hosts using path-based routing.
+// Works with Tailscale Serve (*.ts.net), ngrok (*.ngrok-free.app), or any tunnel.
+// URL format: https://remote-host/appname/path... → routes to appname.test/path...
+// Also supports service names: /sim-rcc/... → routes to sim service of rcc app
+func (s *Server) handleRemoteRequest(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
 	// Route /api/* to dashboard API (for interstitial page polling, etc.)
@@ -476,7 +463,7 @@ func (s *Server) handleTailscaleRequest(w http.ResponseWriter, r *http.Request) 
 		// No app specified - show available apps
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, pages.Error(
-			"Tailscale Serve",
+			"Remote Access",
 			"Specify an app in the path: /appname/...",
 			s.listAppsHTML(),
 			s.cfg.TLD, s.getTheme()))
@@ -522,7 +509,7 @@ func (s *Server) handleTailscaleRequest(w http.ResponseWriter, r *http.Request) 
 	s.handleApp(w, r, app)
 }
 
-// listAppsHTML returns an HTML list of available apps and services for Tailscale routing
+// listAppsHTML returns an HTML list of available apps and services for path-based routing
 func (s *Server) listAppsHTML() string {
 	var sb strings.Builder
 	sb.WriteString(`<p class="hint">Available apps and services:</p><ul>`)
