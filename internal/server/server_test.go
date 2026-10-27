@@ -879,6 +879,9 @@ services:
 		if !strings.Contains(w.Body.String(), "Remote Access") {
 			t.Error("expected 'Remote Access' in response")
 		}
+		if !strings.Contains(w.Body.String(), "/etc/hosts") {
+			t.Error("expected the /etc/hosts hint for stray domains")
+		}
 	})
 
 	t.Run("known app routes to handleApp", func(t *testing.T) {
@@ -923,7 +926,8 @@ services:
 // TestInvalidHostDoesNotKeepConnectionAlive covers the "I removed the
 // /etc/hosts block and the browser still shows fireup" case. A browser reuses
 // a pooled keep-alive socket for an origin without re-resolving DNS, so if
-// fireup keeps the connection open after serving "Invalid host", the user
+// fireup keeps the connection open after a page that did not route to an app,
+// the user
 // stays stuck on fireup long after the hosts entry is gone.
 func TestInvalidHostDoesNotKeepConnectionAlive(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -972,13 +976,21 @@ func TestInvalidHostDoesNotKeepConnectionAlive(t *testing.T) {
 		}
 	})
 
-	t.Run("non-TLD host uses path-based routing", func(t *testing.T) {
+	// A stray domain now gets the remote access landing page rather than an
+	// error, but it must still close the connection for the same reason.
+	t.Run("remote access landing closes the connection", func(t *testing.T) {
 		client := &http.Client{Transport: &http.Transport{}}
 		defer client.CloseIdleConnections()
 
 		resp, _ := get(t, client, "bsky.app")
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("expected 200 (remote access landing), got %d", resp.StatusCode)
+		}
+		if !resp.Close {
+			t.Error("expected Connection: close on the remote access landing")
+		}
+		if _, reused := get(t, client, "fireup.test"); reused {
+			t.Error("expected no pooled connection to survive the remote access landing")
 		}
 	})
 }
@@ -996,16 +1008,19 @@ func TestErrorPagesAreNotCacheable(t *testing.T) {
 	tests := []struct {
 		name       string
 		host       string
+		path       string
 		wantStatus int
 	}{
-		{"unknown app", "nonexistent.test", http.StatusNotFound},
-		{"unknown fireup service", "nope.fireup.test", http.StatusNotFound},
+		{"unknown app", "nonexistent.test", "/", http.StatusNotFound},
+		{"unknown fireup service", "nope.fireup.test", "/", http.StatusNotFound},
+		{"remote access landing", "bsky.app", "/", http.StatusOK},
+		{"remote unknown app", "bsky.app", "/profile/x", http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			s.handleRequest(w, requestWithHost(tt.host, "/"))
+			s.handleRequest(w, requestWithHost(tt.host, tt.path))
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("expected %d, got %d", tt.wantStatus, w.Code)

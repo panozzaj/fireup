@@ -116,14 +116,25 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	s.handleApp(w, r, app)
 }
 
-// invalidHostHint explains why fireup answered for a domain it does not own.
-// A non-fireup domain only reaches this server if something on the machine
-// resolved it to 127.0.0.1 — nearly always a self-blocking /etc/hosts entry.
-// Removing that entry may not be enough on its own, since the browser caches
-// the DNS answer, so the flush commands are included. The stale-socket half of
-// the problem needs no instructions: this response closes the connection.
+// writeStrayHostPage renders a remote access page that did not route to an
+// app. Besides tunnels, a non-fireup domain reaches this server when something
+// on the machine resolved it to 127.0.0.1 — nearly always a leftover
+// /etc/hosts entry. Close the connection instead of keeping it alive: browsers
+// reuse a pooled keep-alive socket for the same origin without re-resolving
+// DNS, so a kept-alive connection here would keep sending the user to fireup
+// for minutes after they fix /etc/hosts.
+func (s *Server) writeStrayHostPage(w http.ResponseWriter, status int, title, message string) {
+	w.Header().Set("Connection", "close")
+	s.writeErrorPage(w, status, title, message, s.listAppsHTML()+s.invalidHostHint())
+}
+
+// invalidHostHint explains why fireup may have answered for a domain it does
+// not own. Removing the /etc/hosts entry may not be enough on its own, since
+// the browser caches the DNS answer, so the flush commands are included. The
+// stale-socket half of the problem needs no instructions: the response closes
+// the connection.
 func (s *Server) invalidHostHint() string {
-	return `<p class="note">Usually a leftover /etc/hosts entry. If you already removed it, flush the cached DNS answer:</p>
+	return `<p class="note">Not expecting fireup on this domain? That is usually a leftover /etc/hosts entry. If you already removed it, flush the cached DNS answer:</p>
 <p class="hint">sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 chrome://net-internals/#dns → Clear host cache</p>`
 }
@@ -486,12 +497,9 @@ func (s *Server) handleRemoteRequest(w http.ResponseWriter, r *http.Request) {
 	// Extract app/service name from first path segment: /appname/... → appname
 	if path == "" || path == "/" {
 		// No app specified - show available apps
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, pages.Error(
+		s.writeStrayHostPage(w, http.StatusOK,
 			"Remote Access",
-			"Specify an app in the path: /appname/...",
-			s.listAppsHTML(),
-			s.cfg.TLD, s.getTheme()))
+			"Specify an app in the path: /appname/...")
 		return
 	}
 
@@ -521,13 +529,9 @@ func (s *Server) handleRemoteRequest(w http.ResponseWriter, r *http.Request) {
 	// Try as app name or alias
 	app, found := s.apps.GetByNameOrAlias(name)
 	if !found {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, pages.Error(
+		s.writeStrayHostPage(w, http.StatusNotFound,
 			"App not found",
-			fmt.Sprintf("No app or service configured for '%s'", name),
-			s.listAppsHTML(),
-			s.cfg.TLD, s.getTheme()))
+			fmt.Sprintf("No app or service configured for '%s'", name))
 		return
 	}
 
