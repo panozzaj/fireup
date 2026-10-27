@@ -68,6 +68,33 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Remove TLD
 	name := strings.TrimSuffix(host, "."+s.cfg.TLD)
 
+	// Path-based service override: /sim-rcc/... on rcc.test routes to the sim
+	// service, stripping the prefix. This lets ngrok tunnels with
+	// --host-header=<app>.test serve the app at root (assets work) while the
+	// simulator WebSocket reaches /sim-rcc/ on the same tunnel.
+	if trimmed := strings.TrimPrefix(r.URL.Path, "/"); strings.Contains(trimmed, "-") {
+		if slash := strings.IndexByte(trimmed, '/'); slash > 0 || !strings.Contains(trimmed[strings.Index(trimmed, "-")+1:], "/") {
+			prefix := trimmed
+			if slash > 0 {
+				prefix = trimmed[:slash]
+			}
+			if idx := strings.Index(prefix, "-"); idx != -1 {
+				svcName := prefix[:idx]
+				appName := prefix[idx+1:]
+				if app, svc, found := s.apps.GetService(appName, svcName); found {
+					remaining := "/"
+					if slash > 0 {
+						remaining = "/" + trimmed[slash+1:]
+					}
+					r.URL.Path = remaining
+					r.URL.RawPath = ""
+					s.handleService(w, r, app, svc)
+					return
+				}
+			}
+		}
+	}
+
 	// Check for service-app pattern (service-appname)
 	if idx := strings.Index(name, "-"); idx != -1 {
 		serviceName := name[:idx]
