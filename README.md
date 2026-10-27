@@ -12,6 +12,7 @@ A local development proxy for all your projects.
 - Wildcard domains - `*.myapp.test` works too
 - Static file serving
 - HTTPS support with locally-trusted certificates (automatic CA generation)
+- Remote access over Tailscale - reach any app from your phone
 - Web dashboard
 - CLI for managing apps and services
 
@@ -135,6 +136,36 @@ admin.myapp.test -> myapp (Host header: admin.myapp.test)
 ```
 
 Your app reads the `Host` header to determine the subdomain.
+
+## Remote Access over Tailscale
+
+`.test` domains only resolve on the machine running fireup. To reach your apps
+from another device on your tailnet — a phone, a tablet, another laptop — expose
+fireup once:
+
+```bash
+tailscale serve http://127.0.0.1:80
+```
+
+Then address apps by **path** instead of subdomain:
+
+```
+https://<machine>.<tailnet>.ts.net/blog/          -> blog app
+https://<machine>.<tailnet>.ts.net/api-myapp/     -> api service of myapp
+```
+
+fireup recognizes any `.ts.net` Host header and takes the app or service name
+from the first path segment, stripping it before forwarding.
+
+The important property is that these URLs name the **app**, not a port. Since
+fireup allocates a dynamic `$PORT` per app and reassigns ports in start order,
+a hardcoded `http://<tailnet-ip>:<port>` is only correct until the next restart.
+Path-based URLs resolve the current port on every request, so they never go
+stale — which matters a lot for a client that stores the address once in a
+settings screen and then fails quietly.
+
+See `fireup docs` for the full reference, including reserved path prefixes and
+troubleshooting.
 
 ## Using a Different TLD
 

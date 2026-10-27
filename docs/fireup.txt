@@ -189,12 +189,27 @@ TAILSCALE SERVE (REMOTE ACCESS)
     from other devices on your Tailnet (e.g., your phone).
 
     SETUP
-        1. Install Tailscale and connect to your tailnet
+        1. Install Tailscale and connect to your tailnet, on BOTH this
+           machine and the device you want to access apps from.
         2. Expose fireup via Tailscale Serve:
-               tailscale serve http://127.0.0.1:9280
+               tailscale serve http://127.0.0.1:80
+
+           Use whatever port fireup is listening on. It defaults to 80;
+           if you started fireup with --http-port, match that instead.
 
         3. Access from any device on your tailnet:
                https://<machine-name>.<tailnet>.ts.net/<app-or-service>/
+
+           Find <machine-name>.<tailnet> with `tailscale status --json`,
+           or just `tailscale status` and read your own row.
+
+    WHY USE THIS INSTEAD OF AN IP AND PORT
+        fireup assigns each app a dynamic $PORT, so http://<tailnet-ip>:<port>
+        is only correct until the next restart — ports are reallocated in
+        start order and quietly move between apps. Tailscale URLs name the
+        app instead, so fireup resolves the current port on every request and
+        the URL never goes stale. This matters most for clients that store
+        the address in a settings screen and fail silently, such as a phone.
 
     URL FORMAT
         For simple apps:
@@ -209,7 +224,7 @@ TAILSCALE SERVE (REMOTE ACCESS)
 
     EXAMPLES
         # Expose fireup (run on your laptop)
-        tailscale serve http://127.0.0.1:9280
+        tailscale serve http://127.0.0.1:80
 
         # From your phone, access the api service of focustrack:
         https://macbook-pro.tail094a69.ts.net/api-focustrack/health
@@ -241,6 +256,39 @@ TAILSCALE SERVE (REMOTE ACCESS)
     STOPPING TAILSCALE SERVE
         tailscale serve reset    # Remove all serve configurations
         tailscale serve status   # View current configuration
+
+    TROUBLESHOOTING
+        Work outward from the machine running fireup — each check assumes
+        the previous one passed.
+
+        "No serve config" from `tailscale serve status`
+            Nothing is exposed yet. Run the setup command above. Note that
+            `tailscale serve` accepts a target port without validating that
+            anything listens there, so a config pointing at the wrong port
+            looks identical to a correct one in `status` output.
+
+        Routing works locally but not from another device
+            Confirm the remote device is actually on the tailnet:
+            `tailscale status` lists peers, and a peer that has not connected
+            in a while shows as "offline, last seen ...". Phones in particular
+            drop off after an OS update or a long idle period, and the
+            Tailscale app can be installed and logged out at the same time.
+
+        "App not found" listing the available apps
+            The first path segment did not match an app, an alias, or a
+            service-app pair. The error page lists what is configured; check
+            for a typo, and remember that multi-service apps need the
+            service-app form (/api-myapp/, not /myapp/api/).
+
+        Verifying without a second device
+            Requests are routed on the Host header, so you can exercise the
+            whole path from the fireup machine:
+
+                curl -H 'Host: <machine>.<tailnet>.ts.net' \
+                     http://127.0.0.1/<app-or-service>/
+
+            A 200 here isolates the problem to Tailscale connectivity rather
+            than fireup routing.
 
 GLOBAL SETTINGS
     Global settings are stored in ~/.config/fireup/config.json
