@@ -68,30 +68,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Remove TLD
 	name := strings.TrimSuffix(host, "."+s.cfg.TLD)
 
-	// Path-based service override: /sim-rcc/... on rcc.test routes to the sim
-	// service, stripping the prefix. This lets ngrok tunnels with
-	// --host-header=<app>.test serve the app at root (assets work) while the
-	// simulator WebSocket reaches /sim-rcc/ on the same tunnel.
-	if trimmed := strings.TrimPrefix(r.URL.Path, "/"); strings.Contains(trimmed, "-") {
-		if slash := strings.IndexByte(trimmed, '/'); slash > 0 || !strings.Contains(trimmed[strings.Index(trimmed, "-")+1:], "/") {
-			prefix := trimmed
-			if slash > 0 {
-				prefix = trimmed[:slash]
-			}
-			if idx := strings.Index(prefix, "-"); idx != -1 {
-				svcName := prefix[:idx]
-				appName := prefix[idx+1:]
-				if app, svc, found := s.apps.GetService(appName, svcName); found {
-					remaining := "/"
-					if slash > 0 {
-						remaining = "/" + trimmed[slash+1:]
-					}
-					r.URL.Path = remaining
-					r.URL.RawPath = ""
-					s.handleService(w, r, app, svc)
-					return
-				}
-			}
+	// Path-based service override: /api-myapp/... on any TLD host routes to the
+	// api service of myapp, stripping the prefix. A tunnel that rewrites the
+	// Host header (e.g. ngrok --host-header=myapp.test) can only carry one
+	// hostname, so this lets the app stay at root (assets resolve) while a
+	// sibling service is reachable by path on the same tunnel.
+	if svcName, appName, rest, ok := splitServicePrefix(r.URL.Path); ok {
+		if app, svc, found := s.apps.GetService(appName, svcName); found {
+			r.URL.Path = rest
+			r.URL.RawPath = ""
+			s.handleService(w, r, app, svc)
+			return
 		}
 	}
 
@@ -139,6 +126,17 @@ func (s *Server) invalidHostHint() string {
 	return `<p class="note">Usually a leftover /etc/hosts entry. If you already removed it, flush the cached DNS answer:</p>
 <p class="hint">sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 chrome://net-internals/#dns → Clear host cache</p>`
+}
+
+// splitServicePrefix splits "/api-myapp/rest" into ("api", "myapp", "/rest").
+// Only the first path segment is considered, split on its first hyphen.
+func splitServicePrefix(path string) (svc, app, rest string, ok bool) {
+	seg, rest, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	svc, app, ok = strings.Cut(seg, "-")
+	if !ok || svc == "" || app == "" {
+		return "", "", "", false
+	}
+	return svc, app, "/" + rest, true
 }
 
 // findApp tries to find an app by progressively shorter names
@@ -475,7 +473,7 @@ func (s *Server) resolveServiceName(name string) *ServiceMatch {
 // handleRemoteRequest handles requests from non-TLD hosts using path-based routing.
 // Works with Tailscale Serve (*.ts.net), ngrok (*.ngrok-free.app), or any tunnel.
 // URL format: https://remote-host/appname/path... → routes to appname.test/path...
-// Also supports service names: /sim-rcc/... → routes to sim service of rcc app
+// Also supports service names: /api-myapp/... → routes to api service of myapp
 func (s *Server) handleRemoteRequest(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 

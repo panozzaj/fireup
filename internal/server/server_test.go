@@ -1043,3 +1043,78 @@ func TestInvalidHostEscapesHost(t *testing.T) {
 		t.Error("expected the host to be escaped exactly once, got double-escaped output")
 	}
 }
+
+func TestSplitServicePrefix(t *testing.T) {
+	tests := []struct {
+		path           string
+		svc, app, rest string
+		ok             bool
+	}{
+		{"/api-myapp/health", "api", "myapp", "/health", true},
+		{"/api-myapp/v1/users?x", "api", "myapp", "/v1/users?x", true},
+		{"/api-myapp/", "api", "myapp", "/", true},
+		{"/api-myapp", "api", "myapp", "/", true},
+		{"/api-my-app/x", "api", "my-app", "/x", true}, // split on the first hyphen
+		{"/", "", "", "", false},
+		{"/assets/app.js", "", "", "", false},
+		{"/assets/app-1.js", "", "", "", false}, // hyphen outside the first segment
+		{"/-myapp/x", "", "", "", false},
+		{"/api-/x", "", "", "", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			svc, app, rest, ok := splitServicePrefix(tc.path)
+			if ok != tc.ok || svc != tc.svc || app != tc.app || rest != tc.rest {
+				t.Errorf("splitServicePrefix(%q) = (%q, %q, %q, %v), want (%q, %q, %q, %v)",
+					tc.path, svc, app, rest, ok, tc.svc, tc.app, tc.rest, tc.ok)
+			}
+		})
+	}
+}
+
+// TestPathServiceOverride covers /<service>-<app>/ on a TLD host. A tunnel
+// that rewrites the Host header to <app>.test can only carry one hostname, so
+// sibling services are reached by path on that same host.
+func TestPathServiceOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{TLD: "test", Dir: tmpDir}
+	apps := config.NewAppStore(cfg)
+	procs := process.NewManager()
+	s := newTestServer(cfg, apps, procs)
+	defer procs.StopAll()
+
+	os.WriteFile(tmpDir+"/shop.yml", []byte(`
+name: shop
+root: /tmp
+services:
+  worker:
+    cmd: echo worker
+  web:
+    cmd: echo web
+    default: true
+`), 0644)
+	apps.Load()
+
+	t.Run("matching prefix routes to the service and strips the prefix", func(t *testing.T) {
+		r := requestWithHost("shop.test", "/worker-shop/health")
+		s.handleRequest(httptest.NewRecorder(), r)
+		if _, found := procs.Get("worker-shop"); !found {
+			t.Error("expected the worker service to be started")
+		}
+		if r.URL.Path != "/health" {
+			t.Errorf("expected path /health after stripping, got %q", r.URL.Path)
+		}
+	})
+
+	t.Run("non-matching hyphenated path is left for the app", func(t *testing.T) {
+		r := requestWithHost("shop.test", "/sale-items/today")
+		s.handleRequest(httptest.NewRecorder(), r)
+		if r.URL.Path != "/sale-items/today" {
+			t.Errorf("expected path untouched, got %q", r.URL.Path)
+		}
+		if _, found := procs.Get("sale-items"); found {
+			t.Error("did not expect a sale-items process")
+		}
+	})
+}
