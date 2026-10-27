@@ -154,8 +154,9 @@ https://<machine>.<tailnet>.ts.net/blog/          -> blog app
 https://<machine>.<tailnet>.ts.net/api-myapp/     -> api service of myapp
 ```
 
-fireup recognizes any `.ts.net` Host header and takes the app or service name
-from the first path segment, stripping it before forwarding.
+Any Host header outside your fireup TLD (`.ts.net`, an ngrok domain, etc.) is
+routed this way: fireup takes the app or service name from the first path
+segment and strips it before forwarding.
 
 The important property is that these URLs name the **app**, not a port. Since
 fireup allocates a dynamic `$PORT` per app and reassigns ports in start order,
